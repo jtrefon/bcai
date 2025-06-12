@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crate: [jobmanager, runtime]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - name: Rust format check
+        run: cargo fmt --manifest-path ${{ matrix.crate }}/Cargo.toml -- --check
+      - name: Clippy
+        run: cargo clippy --manifest-path ${{ matrix.crate }}/Cargo.toml -- -D warnings
+      - name: Tests
+        run: cargo test --manifest-path ${{ matrix.crate }}/Cargo.toml
