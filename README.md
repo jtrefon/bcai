@@ -85,6 +85,17 @@ demonstrates how jobs could be posted and managed locally. It is an early
 prototype meant to accompany the roadmap items and can be built with
 `cargo build` inside that directory.
 
+### VM Runtime
+An experimental VM implementation lives under `runtime/`. It currently supports
+basic stack-based arithmetic instructions and serves as the foundation for a
+future AI-optimized runtime.
+
+Build and run its tests with:
+
+```bash
+cargo test --manifest-path runtime/Cargo.toml
+```
+
 ### Coding Standards
 We maintain coding guidelines in [CODING_STANDARDS.md](CODING_STANDARDS.md)
 to encourage SOLID, clean architecture and consistent formatting across
