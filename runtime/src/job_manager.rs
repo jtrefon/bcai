@@ -65,7 +65,8 @@ impl JobManager {
 
     /// Assign a worker to an open job.
     pub fn assign_job(&mut self, job_id: u64, worker: &str) -> Result<(), JobManagerError> {
-        let job = self.jobs.iter_mut().find(|j| j.id == job_id).ok_or(JobManagerError::JobNotFound)?;
+        let job =
+            self.jobs.iter_mut().find(|j| j.id == job_id).ok_or(JobManagerError::JobNotFound)?;
         if job.completed {
             return Err(JobManagerError::AlreadyCompleted);
         }
@@ -78,7 +79,8 @@ impl JobManager {
 
     /// Mark a job as completed and pay out the reward to the worker.
     pub fn complete_job(&mut self, job_id: u64) -> Result<(), JobManagerError> {
-        let job = self.jobs.iter_mut().find(|j| j.id == job_id).ok_or(JobManagerError::JobNotFound)?;
+        let job =
+            self.jobs.iter_mut().find(|j| j.id == job_id).ok_or(JobManagerError::JobNotFound)?;
         if job.completed {
             return Err(JobManagerError::AlreadyCompleted);
         }
@@ -99,4 +101,3 @@ impl Default for JobManager {
         Self::new(TokenLedger::new())
     }
 }
-
