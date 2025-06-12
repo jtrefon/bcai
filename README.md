@@ -72,3 +72,6 @@ The architecture as described should handle moderate load (especially by offload
 * **AI-specific instructions:** as we control the VM, we can add more optimized instructions (like a matrix multiplication opcode that directly leverages GPU) beyond what Cortex did. Also possibly integrate with emerging AI accelerators or even quantum hardware in future (modular hardware abstraction).
 
 This detailed architecture will continue to evolve with implementation and testing. The above serves as a blueprint for engineers to begin building components and for auditors to understand the intended system interactions. It is designed with modularity in mind – each part (networking, consensus, contracts, off-chain worker) can be developed and improved somewhat independently, as long as the interfaces (like the transactions and message formats) are respected. (End of Architecture Document. In a real publication, one might include appendices with API definitions or pseudocode of critical algorithms like the training consensus or the reward distribution logic.)
+
+## Code of Conduct
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on expected behavior and the moderation process.
