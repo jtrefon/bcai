@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 pub mod token;
+pub mod job_manager;
 
 /// Errors that can occur during VM execution.
 #[derive(Debug, Error, PartialEq, Eq)]
