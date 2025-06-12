@@ -2,7 +2,7 @@
 **Title:** RFC-001: Decentralized AI Training Network – Open Design Proposal
 **Status:** Draft – for community review
 **Target Audience:** Developers, Researchers, and Contributors interested in blockchain or AI
-**Discussion:** This RFC is open on our GitHub repository (link) for comments, pull requests, and contributions.
+**Discussion:** This RFC is open on our GitHub repository [jtrefon/bcai](https://github.com/jtrefon/bcai) for comments, pull requests, and contributions.
 
 ## Introduction
 We are excited to present the first Request for Comments (RFC) for our Decentralized AI Model Training Blockchain. This document serves as both a technical specification outline and a call to action for the community. We invite feedback on all aspects of the design – from consensus mechanism details to API specifications – as we refine the protocol together. The goal of this RFC is to ensure transparency in our thought process and to crowdsource expertise from the wider blockchain and AI communities.
@@ -22,7 +22,7 @@ RFC-001 outlines the high-level architecture (as described in the whitepaper sec
 The RFC is not a polished final specification; rather, it’s a starting point meant to evolve with community input. We expect to iterate on this RFC based on comments and eventually either finalize it or break it into multiple focused RFCs (for example, separate RFCs for the consensus, for the VM, etc.).
 ## How to Contribute
 We encourage contributions in the following ways:
-* **GitHub Discussions and Issues:** Our repository (link) has an “RFC-001” discussion where anyone can ask questions or propose changes. If you have a specific improvement, you can open an issue or even a pull request modifying the RFC text. All changes will be reviewed by maintainers and the community.
+* **GitHub Discussions and Issues:** Our repository [jtrefon/bcai](https://github.com/jtrefon/bcai) has an “RFC-001” discussion where anyone can ask questions or propose changes. If you have a specific improvement, you can open an issue or even a pull request modifying the RFC text. All changes will be reviewed by maintainers and the community.
 * **Design Meetings:** We will host public virtual meetings (AMA style or more structured) to discuss major points of feedback. Summaries of these meetings will be posted for transparency.
 * **Prototype & Code Contributions:** Alongside the RFC text, we welcome experimental code. For instance, if you have an idea for the consensus algorithm or scheduling, feel free to prototype it and share a link. Early-stage code (even if rough) can validate concepts and will be highly appreciated.
 * **Research and References:** If you know of prior research, projects, or data that could inform our design (e.g., a paper on a new proof-of-learning approach, or performance data on GPU scheduling), please share it. Comment in the RFC with references or make a suggestion to include it in our considerations. We aim for an academically and technically rigorous design, so citing known results (as we’ve started doing with PoUW references, etc.) is very welcome.
