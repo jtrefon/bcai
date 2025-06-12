@@ -3,7 +3,7 @@
 This document breaks down roadmap milestones into actionable tasks for early development.
 
 ## Milestone 2: Prototype Development (Q1 2026)
-- [ ] Decide on the base platform (Substrate vs. EVM fork)
+- [ ] Design and implement the custom VM runtime
 - [ ] Initialize a development network with staking and basic token logic
 - [ ] Implement a minimal JobManager contract/pallet for posting tasks
 - [ ] Spike GPU integration by executing a dummy ML task during block production
@@ -14,7 +14,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [ ] Implement a simple Proof-of-Useful-Work consensus algorithm
 - [ ] Develop trainer and evaluator node roles
 - [ ] Add basic P2P networking between nodes
-- [ ] Deploy early smart contracts on the devnet
+- [ ] Deploy early runtime modules on the devnet
 - [ ] Launch an internal dashboard/explorer for jobs
 - [ ] Run a closed testnet with example ML tasks
 
