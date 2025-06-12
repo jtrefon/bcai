@@ -7,7 +7,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [ ] Initialize a development network with staking and basic token logic
 - [ ] Implement a minimal JobManager contract/pallet for posting tasks
 - [ ] Spike GPU integration by executing a dummy ML task during block production
-- [ ] Create a CLI/SDK prototype for submitting jobs
+- [x] Create a CLI/SDK prototype for submitting jobs (`jobmanager` crate in this repo)
 - [ ] Write setup docs for running a node and submitting a job
 
 ## Milestone 3: Testnet Alpha (Q2 2026)
