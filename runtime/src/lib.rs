@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+pub mod token;
+
 /// Errors that can occur during VM execution.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum VmError {
