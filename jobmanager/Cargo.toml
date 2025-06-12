@@ -1,0 +1,18 @@
+[package]
+name = "jobmanager"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "jobmanager_lib"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4.4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"

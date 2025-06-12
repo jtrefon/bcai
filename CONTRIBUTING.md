@@ -28,3 +28,6 @@ Guiding principles recommend keeping governance discussions open through forums,
 
 These channels provide ways to stay updated and collaborate with other contributors.
 
+
+## Coding Standards
+Before submitting code, please review the [Coding Standards](CODING_STANDARDS.md). We follow SOLID principles, clean architecture and enforce formatting with `cargo fmt` and linting with `cargo clippy`.

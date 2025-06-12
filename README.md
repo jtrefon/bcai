@@ -78,3 +78,14 @@ This detailed architecture will continue to evolve with implementation and testi
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on expected behavior and the moderation process.
 
 For a breakdown of near-term development tasks, see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
+### Prototype CLI
+This repository now includes a small Rust program under `jobmanager/` that
+demonstrates how jobs could be posted and managed locally. It is an early
+prototype meant to accompany the roadmap items and can be built with
+`cargo build` inside that directory.
+
+### Coding Standards
+We maintain coding guidelines in [CODING_STANDARDS.md](CODING_STANDARDS.md)
+to encourage SOLID, clean architecture and consistent formatting across
+all crates. Please review these before contributing.
