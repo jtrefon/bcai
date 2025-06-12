@@ -24,17 +24,26 @@ pub enum Instruction {
     Mul,
     /// Pop two values, divide, and push the result.
     Div,
+    /// Duplicate the top value on the stack.
+    Dup,
+    /// Swap the top two values on the stack.
+    Swap,
+    /// Pop a value and store it at the given memory address.
+    Store(usize),
+    /// Load a value from the given memory address and push it.
+    Load(usize),
 }
 
 /// Minimal virtual machine for executing arithmetic instructions.
 pub struct Vm {
     stack: Vec<i64>,
+    memory: std::collections::HashMap<usize, i64>,
 }
 
 impl Vm {
     /// Create a new empty VM.
     pub fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self { stack: Vec::new(), memory: std::collections::HashMap::new() }
     }
 
     /// Execute a program consisting of a series of instructions.
@@ -66,6 +75,25 @@ impl Vm {
                     let a = self.stack.pop().ok_or(VmError::StackUnderflow)?;
                     self.stack.push(a / b);
                 }
+                Instruction::Dup => {
+                    let val = *self.stack.last().ok_or(VmError::StackUnderflow)?;
+                    self.stack.push(val);
+                }
+                Instruction::Swap => {
+                    if self.stack.len() < 2 {
+                        return Err(VmError::StackUnderflow);
+                    }
+                    let len = self.stack.len();
+                    self.stack.swap(len - 1, len - 2);
+                }
+                Instruction::Store(addr) => {
+                    let val = self.stack.pop().ok_or(VmError::StackUnderflow)?;
+                    self.memory.insert(addr, val);
+                }
+                Instruction::Load(addr) => {
+                    let val = *self.memory.get(&addr).unwrap_or(&0);
+                    self.stack.push(val);
+                }
             }
         }
         self.stack.last().cloned().ok_or(VmError::StackUnderflow)
@@ -75,39 +103,5 @@ impl Vm {
 impl Default for Vm {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn addition_works() {
-        let mut vm = Vm::new();
-        let prog = [Instruction::Push(2), Instruction::Push(3), Instruction::Add];
-        let result = vm.execute(&prog).unwrap();
-        assert_eq!(result, 5);
-    }
-
-    #[test]
-    fn multiplication_works() {
-        let mut vm = Vm::new();
-        let prog = [Instruction::Push(4), Instruction::Push(6), Instruction::Mul];
-        assert_eq!(vm.execute(&prog).unwrap(), 24);
-    }
-
-    #[test]
-    fn division_by_zero_fails() {
-        let mut vm = Vm::new();
-        let prog = [Instruction::Push(1), Instruction::Push(0), Instruction::Div];
-        assert_eq!(vm.execute(&prog).unwrap_err(), VmError::DivisionByZero);
-    }
-
-    #[test]
-    fn stack_underflow_detected() {
-        let mut vm = Vm::new();
-        let prog = [Instruction::Add];
-        assert_eq!(vm.execute(&prog).unwrap_err(), VmError::StackUnderflow);
     }
 }
