@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+pub mod job_manager;
 pub mod token;
 
 /// Errors that can occur during VM execution.
