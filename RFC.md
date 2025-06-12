@@ -13,7 +13,7 @@ Traditional blockchains have successfully decentralized finance; our aim is to d
 ## Proposal Summary
 RFC-001 outlines the high-level architecture (as described in the whitepaper section above) including:
 * A useful work consensus mechanism that turns model training into the equivalent of block mining.
-* Modifications to the EVM (or an alternate VM) to support heavy computation and GPU integration.
+* Design of a custom VM to support heavy computation and GPU integration.
 * Networking protocols for job discovery and distribution.
 * Smart contract interfaces for posting jobs and rewarding work.
 * A token economic model to incentivize participation.
@@ -38,7 +38,7 @@ To stay updated and connect with fellow contributors:
 * Join our Discord/Telegram (links on GitHub) to chat in real-time. There are channels for each major aspect (consensus, VM, AI/ML, economics, etc.) where domain experts are helping out.
 * Check out the “Good First Issues” on our GitHub for tasks that newcomers can tackle to get familiar with the codebase. We mentor new contributors and appreciate every PR, no matter how small.
 
-**Memorandum:** We are actively recruiting contributors and core team members. If you’re passionate about this vision, now is the time to get involved. Early contributors will gain reputation in the project and could potentially join the core development team or foundation driving this initiative. We are looking for Rust/Go developers (for blockchain node coding), Solidity/Vyper developers (if we go EVM route for contracts), machine learning specialists (for integration and validation logic), and community managers. 
+**Memorandum:** We are actively recruiting contributors and core team members. If you’re passionate about this vision, now is the time to get involved. Early contributors will gain reputation in the project and could potentially join the core development team or foundation driving this initiative. We are looking for Rust/Go developers (for blockchain node coding) machine learning specialists (for integration and validation logic), and community managers. 
 
 Our mission is bold, but with a talented and passionate community, it’s achievable. This RFC marks the first step in designing with the community. Together, we can create a platform that changes how AI models are trained and deployed – making it more open, fair, and innovative. 
 
