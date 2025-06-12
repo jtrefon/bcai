@@ -5,7 +5,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 ## Milestone 2: Prototype Development (Q1 2026)
 - [x] Design and implement the custom VM runtime (initial skeleton in `runtime` crate)
 - [ ] Initialize a development network with staking and basic token logic
-- [ ] Implement a minimal JobManager contract/pallet for posting tasks
+- [x] Implement a minimal JobManager contract/pallet for posting tasks
 - [ ] Spike GPU integration by executing a dummy ML task during block production
 - [x] Create a CLI/SDK prototype for submitting jobs (`jobmanager` crate in this repo)
 - [x] Write setup docs for running a node and submitting a job (see `SETUP.md`)
