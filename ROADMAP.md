@@ -10,7 +10,7 @@ arxiv.org
  Whitepaper Draft: Write and publish the formal whitepaper covering vision, architecture, and economics (This document serves that role – Completed).
  Community Feedback: Solicit feedback on whitepaper and incorporate revisions (In progress via RFC-001 and outreach).
 Milestone 2: Prototype Development (Q1 2026)
- Choose Base Platform: Decide on building atop Substrate vs. forking an EVM chain. (Tentative: Substrate chosen for flexibility.)
+ Design Custom VM runtime optimized for AI training workloads.
  Devnet Setup: Initialize a development blockchain network with basic token and simple PoS consensus to act as a playground.
  Basic Job Contract: Implement a rudimentary JobManager contract/pallet where tasks can be posted and claimed (without full verification logic yet).
  GPU Integration Spike: Prototype executing a dummy ML task as part of block production in a dev environment (e.g., integrate a GPU computation in the mining loop in a controlled setting). This will help identify API needs for GPU calls.
