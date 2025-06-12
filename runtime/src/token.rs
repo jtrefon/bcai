@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -10,15 +11,10 @@ pub enum LedgerError {
 }
 
 /// Simple in-memory ledger for balances and staking.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TokenLedger {
     balances: HashMap<String, u64>,
     stakes: HashMap<String, u64>,
-}
-
-impl Default for TokenLedger {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl TokenLedger {
