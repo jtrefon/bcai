@@ -18,7 +18,7 @@ pub fn double_numbers(data: &[f32]) -> Result<Vec<f32>, String> {
         source: wgpu::ShaderSource::Wgsl(shader_source.into()),
     });
 
-    let size = (data.len() * std::mem::size_of::<f32>()) as wgpu::BufferAddress;
+    let size = std::mem::size_of_val(data) as wgpu::BufferAddress;
 
     let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("input"),
@@ -97,7 +97,7 @@ pub fn double_numbers(data: &[f32]) -> Result<Vec<f32>, String> {
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        let workgroups = ((data.len() as u32) + 63) / 64;
+        let workgroups = (data.len() as u32).div_ceil(64);
         pass.dispatch_workgroups(workgroups, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, size);
