@@ -1,0 +1,53 @@
+name: Build Releases
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x86_64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            artifact: macos-aarch64
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      - name: Build devnet
+        run: cargo build --release --manifest-path devnet/Cargo.toml --target ${{ matrix.target }}
+      - name: Build jobmanager
+        run: cargo build --release --manifest-path jobmanager/Cargo.toml --target ${{ matrix.target }}
+      - name: Package binaries
+        run: |
+          mkdir package
+          cp target/${{ matrix.target }}/release/devnet package/
+          cp target/${{ matrix.target }}/release/jobmanager package/
+          tar -czf ${{ matrix.artifact }}.tar.gz -C package .
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: dist/**/*.tar.gz
+
