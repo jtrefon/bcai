@@ -35,6 +35,8 @@ enum Commands {
     Mine,
     /// Run a PoUW training task
     Train { size: usize, seed: u64, difficulty: u32 },
+    /// Train a logistic regression model on the digits dataset
+    Mnist,
     /// Manage jobs
     Job {
         #[command(subcommand)]
@@ -121,6 +123,10 @@ fn main() -> Result<(), DevnetError> {
                         println!("training failed");
                     }
                 }
+                Commands::Mnist => match runtime::mnist::train_digits() {
+                    Ok(acc) => println!("digits training accuracy: {:.2}", acc),
+                    Err(e) => println!("training failed: {e}"),
+                },
                 Commands::Job { job } => {
                     let mut jobs = load_jobs()?;
                     match job {
