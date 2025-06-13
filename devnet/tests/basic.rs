@@ -30,3 +30,15 @@ fn job_flow() {
     complete_job(&mut jobs, &mut ledger, 1).unwrap();
     assert_eq!(ledger.balance("bob"), 50);
 }
+
+#[test]
+fn slash_and_reputation_flow() {
+    let mut ledger = TokenLedger::new();
+    mint(&mut ledger, "off", 100);
+    stake(&mut ledger, "off", 40).unwrap();
+    adjust_reputation(&mut ledger, "off", 3);
+    assert_eq!(reputation(&ledger, "off"), 3);
+    slash(&mut ledger, "off", 25).unwrap();
+    assert_eq!(ledger.staked("off"), 15);
+    assert_eq!(ledger.balance(TREASURY), 25);
+}
