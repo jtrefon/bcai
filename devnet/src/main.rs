@@ -132,7 +132,11 @@ fn main() -> Result<(), DevnetError> {
                     match job {
                         JobCommands::Post { poster, description, reward } => {
                             match post_job(&mut jobs, &mut ledger, &poster, description, reward) {
-                                Ok(()) => println!("posted job #{}", jobs.last().unwrap().id),
+                                Ok(()) => {
+                                    if let Some(j) = jobs.last() {
+                                        println!("posted job #{}", j.id);
+                                    }
+                                }
                                 Err(e) => println!("{e}"),
                             }
                         }
