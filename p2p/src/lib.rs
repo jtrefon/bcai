@@ -136,7 +136,7 @@ impl Node {
         let ping = Ping::default();
         let cfg = RequestResponseConfig::default();
         let protocols = std::iter::once(("/job/1.0.0".to_string(), ProtocolSupport::Full));
-        let req = RequestResponse::with_codec(JobCodec::default(), protocols, cfg);
+        let req = RequestResponse::new(protocols, cfg);
         let behaviour = Behaviour { ping, req };
         let swarm =
             Swarm::new(transport, behaviour, peer_id, libp2p::swarm::Config::with_tokio_executor());
@@ -177,9 +177,9 @@ impl Node {
             }
         }
         let rows = floats.len() / 6;
-        let mut weights = vec![0.0f32; 5];
+        let mut weights = [0.0f32; 5];
         for _ in 0..10 {
-            let mut grads = vec![0.0f32; 5];
+            let mut grads = [0.0f32; 5];
             for i in 0..rows {
                 let start = i * 6;
                 let x = &floats[start..start + 5];
@@ -194,13 +194,13 @@ impl Node {
                 weights[j] -= 0.01 * grads[j] / rows as f32;
             }
         }
-        weights
+        weights.to_vec()
     }
 
     pub async fn next_event(&mut self) -> NodeEvent {
         loop {
-            match self.swarm.select_next_some().await {
-                SwarmEvent::Behaviour(event) => match event {
+            if let SwarmEvent::Behaviour(event) = self.swarm.select_next_some().await {
+                match event {
                     NodeEvent::RequestResponse(ev) => {
                         if let RequestResponseEvent::Message { peer, connection_id, message } = ev {
                             match message {
@@ -245,8 +245,7 @@ impl Node {
                         return NodeEvent::RequestResponse(ev);
                     }
                     other => return other,
-                },
-                _ => {}
+                }
             }
         }
     }
