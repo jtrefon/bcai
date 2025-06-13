@@ -33,3 +33,14 @@ cargo run -- complete 1
 These commands update `jobs.json` accordingly.
 
 At this stage no full node exists yet. The job manager CLI acts as a lightweight demonstration of the workflow described in the [roadmap](ROADMAP.md).
+
+## Mining a Dummy Block
+
+The `devnet` crate now includes a `mine` command that demonstrates GPU usage during
+block production. To run it:
+
+```bash
+cd ../devnet
+cargo run -- mine
+```
+This command executes a simple compute shader to double some numbers and prints the result.
