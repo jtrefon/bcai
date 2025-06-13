@@ -4,8 +4,8 @@
 //! doubles each input value. While trivial, it shows how to set up WGPU
 //! and run a compute pass.
 
-use wgpu::util::DeviceExt;
 use thiserror::Error;
+use wgpu::util::DeviceExt;
 
 /// Errors that may occur during GPU compute tasks.
 #[derive(Debug, Error)]
@@ -21,12 +21,12 @@ pub enum GpuError {
 pub fn double_numbers(data: &[f32]) -> Result<Vec<f32>, GpuError> {
     // Create a new WGPU instance and choose the first available adapter.
     let instance = wgpu::Instance::default();
-    let adapter = pollster::block_on(
-        instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
-    )
-    .map_err(|e| GpuError::RequestAdapter(format!("{e:?}")))?;
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-        .map_err(|e| GpuError::RequestDevice(e.to_string()))?;
+    let adapter =
+        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .map_err(|e| GpuError::RequestAdapter(format!("{e:?}")))?;
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .map_err(|e| GpuError::RequestDevice(e.to_string()))?;
 
     let shader_source = include_str!("double.wgsl");
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
