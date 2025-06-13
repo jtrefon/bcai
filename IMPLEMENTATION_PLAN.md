@@ -14,8 +14,8 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [x] Implement a simple Proof-of-Useful-Work consensus algorithm (see `runtime/src/pouw.rs`)
 - [x] Develop trainer and evaluator node roles
 - [x] Add basic P2P networking between nodes
-- [ ] Deploy early runtime modules on the devnet
-- [ ] Launch an internal dashboard/explorer for jobs
+- [x] Deploy early runtime modules on the devnet
+- [x] Launch an internal dashboard/explorer for jobs
 - [ ] Run a closed testnet with example ML tasks
 
 ## Milestone 4: Testnet Beta (Q3 2026)
