@@ -15,6 +15,14 @@ This produces the `jobmanager` binary under `target/release/`.
 ## Prebuilt Binaries
 Prebuilt archives are produced for Linux x86_64 and Apple Silicon whenever a `v*` tag is pushed. Visit the GitHub Releases page to download `devnet` and `jobmanager` without compiling.
 
+## Triggering a Release Build
+To build and publish new archives, create and push a version tag:
+```bash
+git tag -a v0.1.0 -m "release v0.1.0"
+git push origin v0.1.0
+```
+Pushing a tag that starts with `v` runs the `Build Releases` workflow and uploads the packaged binaries to GitHub.
+
 ## Posting a Job
 From the `jobmanager` directory, run:
 ```bash
