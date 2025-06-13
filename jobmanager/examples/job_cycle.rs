@@ -1,4 +1,4 @@
-use jobmanager_lib::{load_jobs, save_jobs, post_job, assign_job, complete_job};
+use jobmanager_lib::{assign_job, complete_job, load_jobs, post_job, save_jobs};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut jobs = load_jobs()?;

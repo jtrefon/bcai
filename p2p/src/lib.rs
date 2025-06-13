@@ -70,7 +70,8 @@ impl Codec for JobCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let bytes = bincode::serialize(&req).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let bytes =
+            bincode::serialize(&req).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         futures::io::AsyncWriteExt::write_all(io, &bytes).await?;
         futures::io::AsyncWriteExt::close(io).await
     }
@@ -84,7 +85,8 @@ impl Codec for JobCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let bytes = bincode::serialize(&res).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let bytes =
+            bincode::serialize(&res).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         futures::io::AsyncWriteExt::write_all(io, &bytes).await?;
         futures::io::AsyncWriteExt::close(io).await
     }
