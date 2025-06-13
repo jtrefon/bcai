@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::token::TokenLedger;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub id: u64,
     pub description: String,
