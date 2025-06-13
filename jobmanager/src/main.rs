@@ -44,22 +44,22 @@ fn main() -> Result<(), JobError> {
             save_jobs(&jobs)?;
             println!("Posted job #{}", job.id);
         }
-        Commands::Assign { job_id, worker } => {
-            if assign_job(&mut jobs, job_id, worker).is_some() {
+        Commands::Assign { job_id, worker } => match assign_job(&mut jobs, job_id, worker) {
+            Ok(_) => {
                 save_jobs(&jobs)?;
                 println!("Assigned job #{job_id}");
-            } else {
-                println!("Job #{job_id} not found");
             }
-        }
-        Commands::Complete { job_id } => {
-            if complete_job(&mut jobs, job_id).is_some() {
+            Err(JobError::JobNotFound) => println!("Job #{job_id} not found"),
+            Err(e) => return Err(e),
+        },
+        Commands::Complete { job_id } => match complete_job(&mut jobs, job_id) {
+            Ok(_) => {
                 save_jobs(&jobs)?;
                 println!("Completed job #{job_id}");
-            } else {
-                println!("Job #{job_id} not found");
             }
-        }
+            Err(JobError::JobNotFound) => println!("Job #{job_id} not found"),
+            Err(e) => return Err(e),
+        },
         Commands::List => {
             for job in &jobs {
                 println!(

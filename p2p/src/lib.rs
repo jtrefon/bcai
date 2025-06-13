@@ -70,7 +70,8 @@ impl Codec for JobCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let bytes = bincode::serialize(&req).unwrap();
+        let bytes =
+            bincode::serialize(&req).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         futures::io::AsyncWriteExt::write_all(io, &bytes).await?;
         futures::io::AsyncWriteExt::close(io).await
     }
@@ -84,7 +85,8 @@ impl Codec for JobCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        let bytes = bincode::serialize(&res).unwrap();
+        let bytes =
+            bincode::serialize(&res).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         futures::io::AsyncWriteExt::write_all(io, &bytes).await?;
         futures::io::AsyncWriteExt::close(io).await
     }
@@ -149,13 +151,13 @@ impl Node {
 
     pub fn listen(&mut self) -> Multiaddr {
         let port: u64 = rand::thread_rng().gen_range(1..u64::MAX);
-        let addr: Multiaddr = format!("/memory/{port}").parse().unwrap();
-        self.swarm.listen_on(addr.clone()).unwrap();
+        let addr: Multiaddr = format!("/memory/{port}").parse().expect("memory addr");
+        self.swarm.listen_on(addr.clone()).expect("listen_on");
         addr
     }
 
     pub fn dial(&mut self, addr: Multiaddr) {
-        self.swarm.dial(addr).unwrap();
+        self.swarm.dial(addr).expect("dial");
     }
 
     pub fn send_handshake(&mut self, peer: PeerId) {
@@ -213,7 +215,7 @@ impl Node {
                                                 .behaviour_mut()
                                                 .req
                                                 .send_response(channel, resp)
-                                                .unwrap();
+                                                .expect("send handshake response");
                                             continue;
                                         }
                                         JobRequest::Train(data) => {
@@ -223,7 +225,7 @@ impl Node {
                                                 .behaviour_mut()
                                                 .req
                                                 .send_response(channel, resp)
-                                                .unwrap();
+                                                .expect("send train response");
                                             continue;
                                         }
                                     }

@@ -110,7 +110,7 @@ pub fn post_job(
     if ledger.balance(poster) < reward {
         return Err(JobManagerError::InsufficientBalance);
     }
-    ledger.transfer(poster, "escrow", reward).unwrap();
+    ledger.transfer(poster, "escrow", reward)?;
     let id = jobs.last().map(|j| j.id + 1).unwrap_or(1);
     jobs.push(Job { id, description, reward, assigned_to: None, completed: false });
     Ok(())
@@ -139,6 +139,6 @@ pub fn complete_job(
     }
     let worker = job.assigned_to.clone().ok_or(JobManagerError::AlreadyAssigned)?;
     job.completed = true;
-    ledger.transfer("escrow", &worker, job.reward).unwrap();
+    ledger.transfer("escrow", &worker, job.reward)?;
     Ok(())
 }

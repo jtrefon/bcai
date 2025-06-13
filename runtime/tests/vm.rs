@@ -1,18 +1,20 @@
 use runtime::{Instruction, Vm, VmError};
 
 #[test]
-fn addition_works() {
+fn addition_works() -> Result<(), VmError> {
     let mut vm = Vm::new();
     let prog = [Instruction::Push(2), Instruction::Push(3), Instruction::Add];
-    let result = vm.execute(&prog).unwrap();
+    let result = vm.execute(&prog)?;
     assert_eq!(result, 5);
+    Ok(())
 }
 
 #[test]
-fn multiplication_works() {
+fn multiplication_works() -> Result<(), VmError> {
     let mut vm = Vm::new();
     let prog = [Instruction::Push(4), Instruction::Push(6), Instruction::Mul];
-    assert_eq!(vm.execute(&prog).unwrap(), 24);
+    assert_eq!(vm.execute(&prog)?, 24);
+    Ok(())
 }
 
 #[test]
@@ -30,7 +32,7 @@ fn stack_underflow_detected() {
 }
 
 #[test]
-fn dup_and_swap_work() {
+fn dup_and_swap_work() -> Result<(), VmError> {
     let mut vm = Vm::new();
     let prog = [
         Instruction::Push(1),
@@ -40,11 +42,12 @@ fn dup_and_swap_work() {
         Instruction::Add,
         Instruction::Add,
     ];
-    assert_eq!(vm.execute(&prog).unwrap(), 4);
+    assert_eq!(vm.execute(&prog)?, 4);
+    Ok(())
 }
 
 #[test]
-fn store_and_load_work() {
+fn store_and_load_work() -> Result<(), VmError> {
     let mut vm = Vm::new();
     let prog = [
         Instruction::Push(42),
@@ -53,5 +56,6 @@ fn store_and_load_work() {
         Instruction::Push(8),
         Instruction::Add,
     ];
-    assert_eq!(vm.execute(&prog).unwrap(), 50);
+    assert_eq!(vm.execute(&prog)?, 50);
+    Ok(())
 }

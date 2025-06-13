@@ -8,9 +8,13 @@ fn setup() {
 #[test]
 fn post_and_list() {
     setup();
-    Command::cargo_bin("jobmanager").unwrap().args(["post", "test job", "100"]).assert().success();
+    Command::cargo_bin("jobmanager")
+        .expect("binary")
+        .args(["post", "test job", "100"])
+        .assert()
+        .success();
 
-    let assert = Command::cargo_bin("jobmanager").unwrap().arg("list").assert().success();
-    let output = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
+    let assert = Command::cargo_bin("jobmanager").expect("binary").arg("list").assert().success();
+    let output = String::from_utf8(assert.get_output().stdout.clone()).expect("utf8");
     assert!(output.contains("test job"));
 }
