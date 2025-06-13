@@ -12,6 +12,9 @@ cargo build --release
 ```
 This produces the `jobmanager` binary under `target/release/`.
 
+## Prebuilt Binaries
+Prebuilt archives are produced for Linux x86_64 and Apple Silicon whenever a `v*` tag is pushed. Visit the GitHub Releases page to download `devnet` and `jobmanager` without compiling.
+
 ## Posting a Job
 From the `jobmanager` directory, run:
 ```bash
