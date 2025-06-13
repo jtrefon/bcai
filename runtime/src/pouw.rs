@@ -27,11 +27,11 @@ pub fn generate_task(size: usize, seed: u64) -> Task {
 fn multiply(a: &[Vec<u8>], b: &[Vec<u8>]) -> Vec<Vec<u32>> {
     let n = a.len();
     let mut result = vec![vec![0u32; n]; n];
-    for i in 0..n {
-        for k in 0..n {
-            let aik = a[i][k] as u32;
-            for j in 0..n {
-                result[i][j] += aik * b[k][j] as u32;
+    for (i, a_row) in a.iter().enumerate() {
+        for (k, b_row) in b.iter().enumerate().take(n) {
+            let aik = a_row[k] as u32;
+            for (j, &bkj) in b_row.iter().enumerate().take(n) {
+                result[i][j] += aik * bkj as u32;
             }
         }
     }
