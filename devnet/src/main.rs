@@ -27,6 +27,25 @@ enum Commands {
     Balance { account: String },
     /// Mine a block executing a dummy GPU task
     Mine,
+    /// Run a PoUW training task
+    Train { size: usize, seed: u64, difficulty: u32 },
+    /// Manage jobs
+    Job {
+        #[command(subcommand)]
+        job: JobCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum JobCommands {
+    /// Post a new job
+    Post { poster: String, description: String, reward: u64 },
+    /// Assign a worker
+    Assign { job_id: u64, worker: String },
+    /// Complete a job
+    Complete { job_id: u64 },
+    /// List jobs
+    List,
 }
 
 fn main() -> Result<(), DevnetError> {
@@ -77,6 +96,47 @@ fn main() -> Result<(), DevnetError> {
                         Ok(res) => println!("mined block with result: {:?}", res),
                         Err(e) => println!("gpu task failed: {e}"),
                     }
+                }
+                Commands::Train { size, seed, difficulty } => {
+                    if train_and_verify(size, seed, difficulty) {
+                        println!("training succeeded");
+                    } else {
+                        println!("training failed");
+                    }
+                }
+                Commands::Job { job } => {
+                    let mut jobs = load_jobs()?;
+                    match job {
+                        JobCommands::Post { poster, description, reward } => {
+                            match post_job(&mut jobs, &mut ledger, &poster, description, reward) {
+                                Ok(()) => println!("posted job #{}", jobs.last().unwrap().id),
+                                Err(e) => println!("{e}"),
+                            }
+                        }
+                        JobCommands::Assign { job_id, worker } => {
+                            if let Err(e) = assign_job(&mut jobs, job_id, &worker) {
+                                println!("{e}");
+                            }
+                        }
+                        JobCommands::Complete { job_id } => {
+                            if let Err(e) = complete_job(&mut jobs, &mut ledger, job_id) {
+                                println!("{e}");
+                            }
+                        }
+                        JobCommands::List => {
+                            for job in &jobs {
+                                println!(
+                                    "#{:<3} {:<20} reward:{:<5} assigned:{:<10} completed:{}",
+                                    job.id,
+                                    job.description,
+                                    job.reward,
+                                    job.assigned_to.as_deref().unwrap_or("-"),
+                                    job.completed
+                                );
+                            }
+                        }
+                    }
+                    save_jobs(&jobs)?;
                 }
                 Commands::Init => unreachable!(),
             }
