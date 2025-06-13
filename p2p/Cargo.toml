@@ -1,0 +1,11 @@
+[package]
+name = "p2p"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libp2p = { version = "0.55", features = ["ping", "noise", "yamux", "tokio"] }
+tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "time"] }
+futures = "0.3"
+rand = "0.8"
+libp2p-swarm = "0.46"
