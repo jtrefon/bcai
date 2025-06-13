@@ -1,0 +1,10 @@
+[package]
+name = "dashboard"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tiny_http = "0.12"
+devnet = { path = "../devnet" }
+runtime = { path = "../runtime" }
+thiserror = "1"
