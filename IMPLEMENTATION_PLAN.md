@@ -22,7 +22,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [x] Add slashing and reputation tracking to penalize misbehavior
 - [x] Integrate real model training (e.g., MNIST) in block production
  - [x] Open the testnet to outside node operators
-- [ ] Provide tutorials for joining the testnet and posting jobs
-- [ ] Hold a community challenge using testnet tokens
+ - [x] Provide tutorials for joining the testnet and posting jobs ([see tutorial](TESTNET_TUTORIAL.md))
+ - [ ] Hold a community challenge using testnet tokens
 
 Additional milestones are outlined in `ROADMAP.md`. This checklist focuses on the near-term steps to bootstrap development and move toward a functional testnet.
