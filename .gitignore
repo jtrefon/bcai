@@ -4,3 +4,5 @@
 /runtime/target
 /jobmanager/jobs.json
 /runtime/Cargo.lock
+/p2p/target
+/p2p/Cargo.lock
