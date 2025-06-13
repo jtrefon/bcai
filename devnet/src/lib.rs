@@ -23,6 +23,7 @@ struct JobsWrapper {
 
 pub const LEDGER_FILE: &str = "ledger.json";
 pub const JOBS_FILE: &str = "jobs.json";
+pub const TREASURY: &str = "treasury";
 
 pub fn load_ledger() -> Result<TokenLedger, DevnetError> {
     if !std::path::Path::new(LEDGER_FILE).exists() {
@@ -73,6 +74,18 @@ pub fn stake(ledger: &mut TokenLedger, account: &str, amount: u64) -> Result<(),
 
 pub fn unstake(ledger: &mut TokenLedger, account: &str, amount: u64) -> Result<(), LedgerError> {
     ledger.unstake(account, amount)
+}
+
+pub fn slash(ledger: &mut TokenLedger, offender: &str, amount: u64) -> Result<(), LedgerError> {
+    ledger.slash(offender, TREASURY, amount)
+}
+
+pub fn reputation(ledger: &TokenLedger, account: &str) -> i32 {
+    ledger.reputation(account)
+}
+
+pub fn adjust_reputation(ledger: &mut TokenLedger, account: &str, delta: i32) {
+    ledger.adjust_reputation(account, delta);
 }
 
 pub fn train_and_verify(size: usize, seed: u64, difficulty: u32) -> bool {

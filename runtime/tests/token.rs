@@ -30,3 +30,18 @@ fn staking_errors() {
     ledger.stake("alice", 10).unwrap();
     assert_eq!(ledger.unstake("alice", 20).unwrap_err(), LedgerError::InsufficientStake);
 }
+
+#[test]
+fn slashing_and_reputation() {
+    let mut ledger = TokenLedger::new();
+    ledger.mint("offender", 50);
+    ledger.stake("offender", 30).unwrap();
+    assert_eq!(ledger.staked("offender"), 30);
+    ledger.adjust_reputation("offender", 5);
+    assert_eq!(ledger.reputation("offender"), 5);
+    ledger.slash("offender", "treasury", 20).unwrap();
+    assert_eq!(ledger.staked("offender"), 10);
+    assert_eq!(ledger.balance("treasury"), 20);
+    ledger.adjust_reputation("offender", -3);
+    assert_eq!(ledger.reputation("offender"), 2);
+}
