@@ -24,9 +24,9 @@ pub fn serve(addr: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
             "/jobs" => {
                 let jobs = load_jobs()?;
                 let html = render_jobs(&jobs);
-                let response = Response::from_string(html).with_header(
-                    tiny_http::Header::from_bytes(b"Content-Type", b"text/html").unwrap(),
-                );
+                let header = tiny_http::Header::from_bytes(b"Content-Type", b"text/html")
+                    .expect("valid header bytes");
+                let response = Response::from_string(html).with_header(header);
                 request.respond(response)?;
             }
             _ => {
