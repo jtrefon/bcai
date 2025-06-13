@@ -1,16 +1,32 @@
+//! GPU utilities used by the devnet for demonstration purposes.
+//!
+//! The `double_numbers` function performs a simple compute shader that
+//! doubles each input value. While trivial, it shows how to set up WGPU
+//! and run a compute pass.
+
 use wgpu::util::DeviceExt;
+use thiserror::Error;
+
+/// Errors that may occur during GPU compute tasks.
+#[derive(Debug, Error)]
+pub enum GpuError {
+    #[error("failed to request adapter: {0}")]
+    RequestAdapter(String),
+    #[error("failed to create device: {0}")]
+    RequestDevice(String),
+}
 
 /// Run a dummy GPU compute task that doubles each element in the input vector.
-/// Returns the result from the GPU or an error string on failure.
-pub fn double_numbers(data: &[f32]) -> Result<Vec<f32>, String> {
+/// Returns the result from the GPU or an error on failure.
+pub fn double_numbers(data: &[f32]) -> Result<Vec<f32>, GpuError> {
     // Create a new WGPU instance and choose the first available adapter.
     let instance = wgpu::Instance::default();
-    let adapter =
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .map_err(|e| format!("failed to request adapter: {e:?}"))?;
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .map_err(|e| format!("failed to create device: {e}"))?;
+    let adapter = pollster::block_on(
+        instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
+    )
+    .map_err(|e| GpuError::RequestAdapter(format!("{e:?}")))?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+        .map_err(|e| GpuError::RequestDevice(e.to_string()))?;
 
     let shader_source = include_str!("double.wgsl");
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
