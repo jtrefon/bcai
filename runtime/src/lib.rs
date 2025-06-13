@@ -3,6 +3,7 @@ use thiserror::Error;
 pub mod evaluator;
 pub mod gpu;
 pub mod job_manager;
+pub mod mnist;
 pub mod pouw;
 pub mod token;
 pub mod trainer;
