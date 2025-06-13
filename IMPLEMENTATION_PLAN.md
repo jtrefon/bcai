@@ -11,7 +11,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [x] Write setup docs for running a node and submitting a job (see `SETUP.md`)
 
 ## Milestone 3: Testnet Alpha (Q2 2026)
-- [ ] Implement a simple Proof-of-Useful-Work consensus algorithm
+- [x] Implement a simple Proof-of-Useful-Work consensus algorithm (see `runtime/src/pouw.rs`)
 - [ ] Develop trainer and evaluator node roles
 - [ ] Add basic P2P networking between nodes
 - [ ] Deploy early runtime modules on the devnet

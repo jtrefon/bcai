@@ -2,6 +2,7 @@ use thiserror::Error;
 
 pub mod gpu;
 pub mod job_manager;
+pub mod pouw;
 pub mod token;
 
 /// Errors that can occur during VM execution.
