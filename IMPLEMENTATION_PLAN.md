@@ -16,11 +16,11 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [x] Add basic P2P networking between nodes
 - [x] Deploy early runtime modules on the devnet
 - [x] Launch an internal dashboard/explorer for jobs
-- [ ] Run a closed testnet with example ML tasks
+- [x] Run a closed testnet with example ML tasks
 
 ## Milestone 4: Testnet Beta (Q3 2026)
-- [ ] Add slashing and reputation tracking to penalize misbehavior
-- [ ] Integrate real model training (e.g., MNIST) in block production
+- [x] Add slashing and reputation tracking to penalize misbehavior
+- [x] Integrate real model training (e.g., MNIST) in block production
 - [ ] Open the testnet to outside node operators
 - [ ] Provide tutorials for joining the testnet and posting jobs
 - [ ] Hold a community challenge using testnet tokens
