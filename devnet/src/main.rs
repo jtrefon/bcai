@@ -23,8 +23,14 @@ enum Commands {
     Stake { account: String, amount: u64 },
     /// Unstake tokens
     Unstake { account: String, amount: u64 },
+    /// Slash staked tokens to the treasury
+    Slash { account: String, amount: u64 },
     /// Show balances
     Balance { account: String },
+    /// Show reputation score
+    Reputation { account: String },
+    /// Adjust reputation by delta
+    AdjustRep { account: String, delta: i32 },
     /// Mine a block executing a dummy GPU task
     Mine,
     /// Run a PoUW training task
@@ -83,12 +89,23 @@ fn main() -> Result<(), DevnetError> {
                         println!("{e}");
                     }
                 }
+                Commands::Slash { account, amount } => {
+                    if let Err(e) = slash(&mut ledger, &account, amount) {
+                        println!("{e}");
+                    }
+                }
                 Commands::Balance { account } => {
                     println!(
                         "balance: {} staked: {}",
                         ledger.balance(&account),
                         ledger.staked(&account)
                     );
+                }
+                Commands::Reputation { account } => {
+                    println!("reputation: {}", reputation(&ledger, &account));
+                }
+                Commands::AdjustRep { account, delta } => {
+                    adjust_reputation(&mut ledger, &account, delta);
                 }
                 Commands::Mine => {
                     let input = vec![1.0f32, 2.0, 3.0, 4.0];

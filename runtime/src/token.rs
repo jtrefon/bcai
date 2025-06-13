@@ -15,12 +15,13 @@ pub enum LedgerError {
 pub struct TokenLedger {
     balances: HashMap<String, u64>,
     stakes: HashMap<String, u64>,
+    reputations: HashMap<String, i32>,
 }
 
 impl TokenLedger {
     /// Create a new empty ledger.
     pub fn new() -> Self {
-        Self { balances: HashMap::new(), stakes: HashMap::new() }
+        Self { balances: HashMap::new(), stakes: HashMap::new(), reputations: HashMap::new() }
     }
 
     /// Return the free token balance for `account`.
@@ -73,5 +74,33 @@ impl TokenLedger {
         let bal = self.balances.entry(account.to_string()).or_default();
         *bal += amount;
         Ok(())
+    }
+
+    /// Slash staked tokens from `offender` and transfer them to `recipient`.
+    pub fn slash(
+        &mut self,
+        offender: &str,
+        recipient: &str,
+        amount: u64,
+    ) -> Result<(), LedgerError> {
+        let off = self.stakes.entry(offender.to_string()).or_default();
+        if *off < amount {
+            return Err(LedgerError::InsufficientStake);
+        }
+        *off -= amount;
+        let to = self.balances.entry(recipient.to_string()).or_default();
+        *to += amount;
+        Ok(())
+    }
+
+    /// Return the reputation score for `account`.
+    pub fn reputation(&self, account: &str) -> i32 {
+        *self.reputations.get(account).unwrap_or(&0)
+    }
+
+    /// Adjust the reputation for `account` by `delta`.
+    pub fn adjust_reputation(&mut self, account: &str, delta: i32) {
+        let rep = self.reputations.entry(account.to_string()).or_default();
+        *rep += delta;
     }
 }
