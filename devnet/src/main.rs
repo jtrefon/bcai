@@ -25,6 +25,8 @@ enum Commands {
     Unstake { account: String, amount: u64 },
     /// Show balances
     Balance { account: String },
+    /// Mine a block executing a dummy GPU task
+    Mine,
 }
 
 fn main() -> Result<(), DevnetError> {
@@ -68,6 +70,13 @@ fn main() -> Result<(), DevnetError> {
                         ledger.balance(&account),
                         ledger.staked(&account)
                     );
+                }
+                Commands::Mine => {
+                    let input = vec![1.0f32, 2.0, 3.0, 4.0];
+                    match runtime::gpu::double_numbers(&input) {
+                        Ok(res) => println!("mined block with result: {:?}", res),
+                        Err(e) => println!("gpu task failed: {e}"),
+                    }
                 }
                 Commands::Init => unreachable!(),
             }

@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+pub mod gpu;
 pub mod job_manager;
 pub mod token;
 

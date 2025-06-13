@@ -6,7 +6,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 - [x] Design and implement the custom VM runtime (initial skeleton in `runtime` crate)
 - [x] Initialize a development network with staking and basic token logic
 - [x] Implement a minimal JobManager contract/pallet for posting tasks
-- [ ] Spike GPU integration by executing a dummy ML task during block production
+- [x] Spike GPU integration by executing a dummy ML task during block production
 - [x] Create a CLI/SDK prototype for submitting jobs (`jobmanager` crate in this repo)
 - [x] Write setup docs for running a node and submitting a job (see `SETUP.md`)
 
