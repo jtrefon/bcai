@@ -21,7 +21,7 @@ This document breaks down roadmap milestones into actionable tasks for early dev
 ## Milestone 4: Testnet Beta (Q3 2026)
 - [x] Add slashing and reputation tracking to penalize misbehavior
 - [x] Integrate real model training (e.g., MNIST) in block production
-- [ ] Open the testnet to outside node operators
+ - [x] Open the testnet to outside node operators
 - [ ] Provide tutorials for joining the testnet and posting jobs
 - [ ] Hold a community challenge using testnet tokens
 

@@ -47,3 +47,22 @@ cd ../devnet
 cargo run -- mine
 ```
 This command executes a simple compute shader to double some numbers and prints the result.
+
+## Joining the Testnet
+
+With the `p2p` crate you can run a node that communicates over TCP. Start one
+node listening on a public port:
+
+```bash
+cargo run --manifest-path p2p/Cargo.toml --example node -- 8000
+```
+
+In another terminal (or on a different machine) connect to it:
+
+```bash
+cargo run --manifest-path p2p/Cargo.toml --example node -- 0 /ip4/ADDRESS/tcp/8000
+```
+
+Replace `ADDRESS` with the host running the first node. Nodes will exchange a
+handshake and can then send training jobs. This opens the dev network to external
+participants.

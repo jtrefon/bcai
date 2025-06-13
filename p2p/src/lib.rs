@@ -9,7 +9,7 @@ use libp2p::{
         Event as RequestResponseEvent, Message as RequestResponseMessage, ProtocolSupport,
     },
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
-    yamux, Multiaddr, PeerId, Transport,
+    tcp, yamux, Multiaddr, PeerId, Transport,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -125,10 +125,37 @@ pub struct Node {
 
 impl Node {
     pub fn new(cpus: u8, gpus: u8) -> Self {
+        Self::new_memory(cpus, gpus)
+    }
+
+    /// Create a node using an in-memory transport. Primarily used for tests.
+    pub fn new_memory(cpus: u8, gpus: u8) -> Self {
         let id = identity::Keypair::generate_ed25519();
         let peer_id = PeerId::from(id.public());
 
         let transport = MemoryTransport::default()
+            .upgrade(upgrade::Version::V1)
+            .authenticate(noise::Config::new(&id).expect("noise config"))
+            .multiplex(yamux::Config::default())
+            .timeout(Duration::from_secs(20))
+            .boxed();
+
+        let ping = Ping::default();
+        let cfg = RequestResponseConfig::default();
+        let protocols = std::iter::once(("/job/1.0.0".to_string(), ProtocolSupport::Full));
+        let req = RequestResponse::new(protocols, cfg);
+        let behaviour = Behaviour { ping, req };
+        let swarm =
+            Swarm::new(transport, behaviour, peer_id, libp2p::swarm::Config::with_tokio_executor());
+        Self { peer_id, swarm, capability: Capability { cpus, gpus } }
+    }
+
+    /// Create a node that communicates over TCP.
+    pub fn new_tcp(cpus: u8, gpus: u8) -> Self {
+        let id = identity::Keypair::generate_ed25519();
+        let peer_id = PeerId::from(id.public());
+
+        let transport = tcp::tokio::Transport::new(tcp::Config::default())
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::Config::new(&id).expect("noise config"))
             .multiplex(yamux::Config::default())
@@ -152,6 +179,13 @@ impl Node {
     pub fn listen(&mut self) -> Multiaddr {
         let port: u64 = rand::thread_rng().gen_range(1..u64::MAX);
         let addr: Multiaddr = format!("/memory/{port}").parse().expect("memory addr");
+        self.swarm.listen_on(addr.clone()).expect("listen_on");
+        addr
+    }
+
+    /// Listen on a TCP port, returning the bound multiaddress.
+    pub fn listen_tcp(&mut self, port: u16) -> Multiaddr {
+        let addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{port}").parse().expect("tcp addr");
         self.swarm.listen_on(addr.clone()).expect("listen_on");
         addr
     }
