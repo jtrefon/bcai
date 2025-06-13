@@ -1,9 +1,11 @@
 use thiserror::Error;
 
+pub mod evaluator;
 pub mod gpu;
 pub mod job_manager;
 pub mod pouw;
 pub mod token;
+pub mod trainer;
 
 /// Errors that can occur during VM execution.
 #[derive(Debug, Error, PartialEq, Eq)]
