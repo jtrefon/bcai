@@ -19,3 +19,8 @@ If you witness or experience unacceptable behavior, please email **team@bcai.org
 ## Moderation Process
 Maintainers may remove comments, reject contributions or temporarily ban accounts that violate this Code of Conduct. Repeated or severe violations may result in permanent exclusion from community spaces. Appeals can be directed to the project's governance DAO for final review.
 
+## Contributor Responsibilities
+- Before submitting a pull request, contributors **must** run the full test suite
+  for all crates. Code that does not build or has failing tests will not be
+  accepted.
+
