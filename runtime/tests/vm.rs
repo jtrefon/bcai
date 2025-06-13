@@ -1,18 +1,20 @@
 use runtime::{Instruction, Vm, VmError};
 
 #[test]
-fn addition_works() {
+fn addition_works() -> Result<(), VmError> {
     let mut vm = Vm::new();
     let prog = [Instruction::Push(2), Instruction::Push(3), Instruction::Add];
-    let result = vm.execute(&prog).unwrap();
+    let result = vm.execute(&prog)?;
     assert_eq!(result, 5);
+    Ok(())
 }
 
 #[test]
-fn multiplication_works() {
+fn multiplication_works() -> Result<(), VmError> {
     let mut vm = Vm::new();
     let prog = [Instruction::Push(4), Instruction::Push(6), Instruction::Mul];
-    assert_eq!(vm.execute(&prog).unwrap(), 24);
+    assert_eq!(vm.execute(&prog)?, 24);
+    Ok(())
 }
 
 #[test]

@@ -1,7 +1,12 @@
+//! A minimal in-memory job manager used for tests and the devnet.
+//!
+//! Jobs track an assigned worker and reward amount. Rewards are held in
+//! escrow using the [`TokenLedger`] until completion.
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::token::TokenLedger;
+use crate::token::{LedgerError, TokenLedger};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
@@ -22,6 +27,8 @@ pub enum JobManagerError {
     AlreadyCompleted,
     #[error("insufficient balance for reward")]
     InsufficientBalance,
+    #[error(transparent)]
+    Ledger(#[from] LedgerError),
 }
 
 /// Minimal in-memory job manager.
@@ -57,11 +64,11 @@ impl JobManager {
             return Err(JobManagerError::InsufficientBalance);
         }
         // reserve tokens by transferring to a temporary holding account
-        self.ledger.transfer(poster, "escrow", reward).unwrap();
+        self.ledger.transfer(poster, "escrow", reward)?;
         let id = self.jobs.last().map(|j| j.id + 1).unwrap_or(1);
-        let job = Job { id, description, reward, assigned_to: None, completed: false };
-        self.jobs.push(job);
-        Ok(self.jobs.last().unwrap())
+        self.jobs.push(Job { id, description, reward, assigned_to: None, completed: false });
+        let idx = self.jobs.len() - 1;
+        Ok(&self.jobs[idx])
     }
 
     /// Assign a worker to an open job.
@@ -88,7 +95,7 @@ impl JobManager {
         let worker = job.assigned_to.clone().ok_or(JobManagerError::AlreadyAssigned)?;
         job.completed = true;
         // release reward from escrow to worker
-        self.ledger.transfer("escrow", &worker, job.reward).unwrap();
+        self.ledger.transfer("escrow", &worker, job.reward)?;
         Ok(())
     }
 
