@@ -32,7 +32,7 @@ fn local_train(data: &[u8]) -> Vec<f32> {
 
 #[tokio::test]
 async fn distributed_linear_regression() {
-    let data = std::fs::read("tests/data/linear.csv").unwrap();
+    let data = std::fs::read("tests/data/linear.csv").expect("read dataset");
     let mut a = Node::new(4, 1);
     let mut b = Node::new(8, 2);
     let addr = a.listen();
