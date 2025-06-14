@@ -25,6 +25,8 @@ enum Commands {
     Unstake { account: String, amount: u64 },
     /// Slash staked tokens to the treasury
     Slash { account: String, amount: u64 },
+    /// Burn tokens from an account
+    Burn { account: String, amount: u64 },
     /// Show balances
     Balance { account: String },
     /// Show reputation score
@@ -93,6 +95,11 @@ fn main() -> Result<(), DevnetError> {
                 }
                 Commands::Slash { account, amount } => {
                     if let Err(e) = slash(&mut ledger, &account, amount) {
+                        println!("{e}");
+                    }
+                }
+                Commands::Burn { account, amount } => {
+                    if let Err(e) = burn(&mut ledger, &account, amount) {
                         println!("{e}");
                     }
                 }

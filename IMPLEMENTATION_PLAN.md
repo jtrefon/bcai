@@ -26,3 +26,10 @@ This document breaks down roadmap milestones into actionable tasks for early dev
  - [x] Hold a community challenge using testnet tokens ([see details](COMMUNITY_CHALLENGE.md))
 
 Additional milestones are outlined in `ROADMAP.md`. This checklist focuses on the near-term steps to bootstrap development and move toward a functional testnet.
+
+## Milestone 5: Audit, Optimization & Hardening (Q4 2026)
+- [ ] Conduct a third-party security audit of the runtime and contracts
+- [x] Implement token burning to allow permanent removal of tokens
+- [x] Expose a `burn` command in the devnet CLI
+- [ ] Profile PoUW execution for bottlenecks and optimize
+- [ ] Stress test job handling with multiple concurrent tasks
