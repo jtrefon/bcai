@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn federated_averaging() {
-        let mut engine = FederatedEngine::new(FederatedConfig::default());
+        let engine = FederatedEngine::new(FederatedConfig::default());
         
         let models = vec![
             ("node1".to_string(), create_test_model(vec![1.0, 2.0, 3.0], 0.8)),

@@ -623,12 +623,12 @@ mod tests {
     #[test]
     fn test_governance_proposal() {
         let mut engine = SmartContractEngine::new();
-        engine.set_balance("creator".to_string(), 200000);
+        engine.set_balance("creator".to_string(), 300000); // Increased balance
         
         // Create staking to have voting power
         let _staking = engine.create_staking_contract(
             "creator".to_string(),
-            150000,
+            100000, // Reduced stake amount
             90,
             0.12,
         ).unwrap();

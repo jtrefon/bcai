@@ -7,6 +7,7 @@ pub mod job_manager;
 pub mod mnist;
 pub mod monitoring;
 pub mod network;
+pub mod neural_network;
 pub mod node;
 pub mod p2p_service;
 pub mod pouw;
@@ -14,6 +15,22 @@ pub mod security;
 pub mod smart_contracts;
 pub mod token;
 pub mod trainer;
+
+pub use evaluator::*;
+pub use federated::*;
+pub use gpu::*;
+pub use job_manager::*;
+pub use mnist::*;
+pub use monitoring::*;
+pub use network::*;
+pub use neural_network::*;
+pub use node::*;
+pub use p2p_service::*;
+pub use pouw::*;
+pub use security::*;
+pub use smart_contracts::*;
+pub use token::*;
+pub use trainer::*;
 
 /// Errors that can occur during VM execution.
 #[derive(Debug, Error, PartialEq, Eq)]
