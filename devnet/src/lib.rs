@@ -34,6 +34,12 @@ pub struct TokenLedger {
     pub balances: HashMap<String, u64>,
 }
 
+impl Default for TokenLedger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenLedger {
     pub fn new() -> Self {
         Self { balances: HashMap::new() }
@@ -181,7 +187,7 @@ pub fn post_job(
     jobs: &mut Vec<Job>,
     ledger: &mut TokenLedger,
     poster: &str,
-    description: String,
+    _description: String,
     reward: u64,
 ) -> Result<(), JobManagerError> {
     if ledger.balance(poster) < reward {
@@ -196,7 +202,7 @@ pub fn post_job(
 pub fn assign_job(jobs: &mut [Job], job_id: &str, worker: &str) -> Result<(), JobManagerError> {
     let job = jobs
         .iter_mut()
-        .find(|j| j.id == job_id.to_string())
+        .find(|j| j.id == job_id)
         .ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
     job.data = Vec::new();
     job.id = worker.to_string();
@@ -210,7 +216,7 @@ pub fn complete_job(
 ) -> Result<(), JobManagerError> {
     let job = jobs
         .iter_mut()
-        .find(|j| j.id == job_id.to_string())
+        .find(|j| j.id == job_id)
         .ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
     if !job.data.is_empty() {
         return Err(JobManagerError::InvalidJobData);

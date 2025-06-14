@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
-use runtime::{Instruction, Vm, VmConfig};
+#[cfg(feature = "enhanced-vm")]
+use runtime::VmConfig;
+use runtime::{Instruction, Vm};
 
 #[cfg(feature = "enhanced-vm")]
 use runtime::{
@@ -9,6 +11,7 @@ use runtime::{
     python_bridge::PythonBridge,
     tensor_ops::{Tensor, TensorManager},
 };
+#[cfg(feature = "enhanced-vm")]
 use std::time::Instant;
 
 #[derive(Parser)]

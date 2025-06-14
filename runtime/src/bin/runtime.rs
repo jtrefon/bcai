@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
-use runtime::{Instruction, Vm, VmConfig};
+#[cfg(feature = "enhanced-vm")]
+use runtime::VmConfig;
+use runtime::{Instruction, Vm};
 
 #[cfg(feature = "enhanced-vm")]
 use runtime::{
@@ -163,7 +165,7 @@ async fn execute_command(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let parts: Vec<&str> = command.split_whitespace().collect();
 
-    match parts.get(0) {
+    match parts.first() {
         Some(&"tensor_add") => {
             if parts.len() != 4 {
                 return Err("Usage: tensor_add <id1> <id2> <result_id>".into());
@@ -202,7 +204,7 @@ async fn execute_command(
                 Err(e) => Err(format!("Python error: {}", e).into()),
             }
         }
-        _ => Err(format!("Unknown command: {}", parts.get(0).unwrap_or(&"")).into()),
+        _ => Err(format!("Unknown command: {}", parts.first().unwrap_or(&"")).into()),
     }
 }
 
@@ -404,7 +406,7 @@ async fn run_basic_interactive() -> Result<(), Box<dyn std::error::Error>> {
 fn execute_basic_command(vm: &mut Vm, command: &str) -> Result<String, Box<dyn std::error::Error>> {
     let parts: Vec<&str> = command.split_whitespace().collect();
 
-    match parts.get(0) {
+    match parts.first() {
         Some(&"push") => {
             if parts.len() != 2 {
                 return Err("Usage: push <value>".into());
@@ -430,7 +432,7 @@ fn execute_basic_command(vm: &mut Vm, command: &str) -> Result<String, Box<dyn s
             Ok("Divided top two values".to_string())
         }
         Some(&"stack") => Ok(format!("Stack: {:?}", vm.stack())),
-        _ => Err(format!("Unknown command: {}", parts.get(0).unwrap_or(&"")).into()),
+        _ => Err(format!("Unknown command: {}", parts.first().unwrap_or(&"")).into()),
     }
 }
 
