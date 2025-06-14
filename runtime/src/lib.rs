@@ -50,20 +50,34 @@ pub enum LedgerError {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct TokenLedger;
+pub struct TokenLedger {
+    balances: std::collections::HashMap<String, u64>,
+}
 
 impl TokenLedger {
     pub fn new() -> Self {
-        Self
+        Self { balances: std::collections::HashMap::new() }
     }
-    pub fn mint(&mut self, _account: &str, _amount: u64) -> Result<(), LedgerError> {
+
+    pub fn mint(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        let entry = self.balances.entry(account.to_string()).or_default();
+        *entry = entry.saturating_add(amount);
         Ok(())
     }
-    pub fn transfer(&mut self, _from: &str, _to: &str, _amount: u64) -> Result<(), LedgerError> {
+
+    pub fn transfer(&mut self, from: &str, to: &str, amount: u64) -> Result<(), LedgerError> {
+        let from_balance = self.balances.entry(from.to_string()).or_default();
+        if *from_balance < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        *from_balance -= amount;
+        let to_balance = self.balances.entry(to.to_string()).or_default();
+        *to_balance = to_balance.saturating_add(amount);
         Ok(())
     }
-    pub fn balance(&self, _account: &str) -> u64 {
-        0
+
+    pub fn balance(&self, account: &str) -> u64 {
+        *self.balances.get(account).unwrap_or(&0)
     }
 }
 
