@@ -1,16 +1,16 @@
 //! Python Bridge for Sandboxed ML Code Execution
-//! 
+//!
 //! This module provides secure execution of Python code within the VM,
 //! allowing access to popular ML libraries while maintaining security isolation.
 
-use crate::{VmError, TensorId, PythonConstraints, enhanced_vm::InstructionResult};
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use std::sync::Arc;
-use thiserror::Error;
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyModule};
+use crate::{enhanced_vm::InstructionResult, PythonConstraints, TensorId};
 use parking_lot::Mutex;
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use thiserror::Error;
 
 /// Python execution errors
 #[derive(Debug, Error)]
@@ -140,7 +140,7 @@ impl PythonSandbox {
     pub fn new(constraints: PythonConstraints) -> Result<Self, PythonError> {
         // Initialize Python interpreter if not already done
         pyo3::prepare_freethreaded_python();
-        
+
         let import_validator = ImportValidator {
             allowed_imports: constraints.allowed_imports.clone(),
             blocked_patterns: vec![
@@ -198,7 +198,7 @@ impl PythonSandbox {
         constraints: &PythonConstraints,
     ) -> Result<InstructionResult, PythonError> {
         let start_time = Instant::now();
-        
+
         {
             let mut monitor = self.resource_monitor.lock();
             monitor.execution_start = Some(start_time);
@@ -232,10 +232,7 @@ impl PythonSandbox {
         // Update statistics
         self.update_execution_stats(start_time, true, false);
 
-        Ok(InstructionResult {
-            output_tensors: Some(output_data),
-            training_metrics: None,
-        })
+        Ok(InstructionResult { output_tensors: Some(output_data), training_metrics: None })
     }
 
     /// Comprehensive code validation with security analysis
@@ -247,16 +244,21 @@ impl PythonSandbox {
         let mut network_access_attempts = Vec::new();
 
         let lines: Vec<&str> = code.lines().collect();
-        
+
         for (line_num, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
             let line_number = line_num + 1;
-            
+
             // Check for imports
             if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-                self.validate_import_line(trimmed, line_number, &mut violations, &mut imported_modules);
+                self.validate_import_line(
+                    trimmed,
+                    line_number,
+                    &mut violations,
+                    &mut imported_modules,
+                );
             }
-            
+
             // Check for dangerous function calls
             for dangerous_func in &self.import_validator.dangerous_functions {
                 if trimmed.contains(dangerous_func) {
@@ -269,7 +271,7 @@ impl PythonSandbox {
                     forbidden_calls.push(dangerous_func.clone());
                 }
             }
-            
+
             // Check for file operations
             if trimmed.contains("open(") && !self.constraints.enable_file_access {
                 violations.push(SecurityViolation {
@@ -280,7 +282,7 @@ impl PythonSandbox {
                 });
                 file_access_attempts.push(trimmed.to_string());
             }
-            
+
             // Check for network operations
             let network_patterns = ["urllib", "requests", "socket", "http", "ftp", "smtp"];
             for pattern in &network_patterns {
@@ -353,15 +355,16 @@ impl PythonSandbox {
 
         if !module_name.is_empty() {
             imported_modules.push(module_name.to_string());
-            
+
             // Check if import is allowed
             if !self.import_validator.is_import_allowed(module_name) {
-                let severity = if self.import_validator.blocked_patterns.contains(&module_name.to_string()) {
-                    Severity::Critical
-                } else {
-                    Severity::Medium
-                };
-                
+                let severity =
+                    if self.import_validator.blocked_patterns.contains(&module_name.to_string()) {
+                        Severity::Critical
+                    } else {
+                        Severity::Medium
+                    };
+
                 violations.push(SecurityViolation {
                     violation_type: ViolationType::DisallowedImport,
                     line_number,
@@ -375,26 +378,27 @@ impl PythonSandbox {
     /// Estimate code complexity for resource planning
     fn estimate_code_complexity(&self, lines: &[&str]) -> u32 {
         let mut complexity = lines.len() as u32;
-        
+
         for line in lines {
             let trimmed = line.trim();
-            
+
             // Add complexity for loops
             if trimmed.starts_with("for ") || trimmed.starts_with("while ") {
                 complexity += 5;
             }
-            
+
             // Add complexity for nested structures
-            if trimmed.starts_with("    ") { // Basic indentation detection
+            if trimmed.starts_with("    ") {
+                // Basic indentation detection
                 complexity += 2;
             }
-            
+
             // Add complexity for ML operations
             if trimmed.contains("torch.") || trimmed.contains("np.") || trimmed.contains("model.") {
                 complexity += 3;
             }
         }
-        
+
         complexity
     }
 
@@ -406,40 +410,43 @@ impl PythonSandbox {
         constraints: &PythonConstraints,
     ) -> Result<PythonExecutionResult, PythonError> {
         let start_time = Instant::now();
-        
+
         Python::with_gil(|py| {
             // Create restricted globals
             let globals = self.create_restricted_globals(py)?;
-            
+
             // Add tensor data to globals
             for (name, data) in tensor_context {
                 let py_list = PyList::new(py, &data);
                 globals.set_item(name, py_list)?;
             }
-            
+
             // Create locals dict for capturing results
             let locals = PyDict::new(py);
-            
+
             // Execute code with timeout monitoring
-            let execution_result = self.execute_with_timeout(py, code, globals, locals, constraints);
-            
+            let execution_result =
+                self.execute_with_timeout(py, code, globals, locals, constraints);
+
             match execution_result {
                 Ok(_) => {
                     // Capture output and locals
                     let output = "Execution completed successfully".to_string();
                     let mut serialized_locals = HashMap::new();
-                    
+
                     // Serialize important locals (excluding built-ins)
                     for (key, value) in locals.iter() {
                         if let Ok(key_str) = key.extract::<String>() {
                             if !key_str.starts_with('_') {
-                                if let Ok(value_str) = value.str().and_then(|s| s.extract::<String>()) {
+                                if let Ok(value_str) =
+                                    value.str().and_then(|s| s.extract::<String>())
+                                {
                                     serialized_locals.insert(key_str, value_str);
                                 }
                             }
                         }
                     }
-                    
+
                     Ok(PythonExecutionResult {
                         success: true,
                         output,
@@ -450,17 +457,15 @@ impl PythonSandbox {
                         locals: serialized_locals,
                     })
                 }
-                Err(py_err) => {
-                    Ok(PythonExecutionResult {
-                        success: false,
-                        output: String::new(),
-                        error_message: Some(py_err.to_string()),
-                        execution_time_ms: start_time.elapsed().as_millis() as u64,
-                        memory_used_mb: self.estimate_memory_usage(),
-                        output_tensors: HashMap::new(),
-                        locals: HashMap::new(),
-                    })
-                }
+                Err(py_err) => Ok(PythonExecutionResult {
+                    success: false,
+                    output: String::new(),
+                    error_message: Some(py_err.to_string()),
+                    execution_time_ms: start_time.elapsed().as_millis() as u64,
+                    memory_used_mb: self.estimate_memory_usage(),
+                    output_tensors: HashMap::new(),
+                    locals: HashMap::new(),
+                }),
             }
         })
     }
@@ -468,32 +473,52 @@ impl PythonSandbox {
     /// Create restricted globals dictionary
     fn create_restricted_globals(&self, py: Python) -> Result<&PyDict, PythonError> {
         let globals = PyDict::new(py);
-        
+
         // Add only safe built-ins
         let safe_builtins = vec![
-            "len", "range", "enumerate", "zip", "map", "filter", "sum", "min", "max",
-            "abs", "round", "int", "float", "str", "bool", "list", "dict", "tuple", "set",
-            "print", "type", "isinstance", "hasattr"
+            "len",
+            "range",
+            "enumerate",
+            "zip",
+            "map",
+            "filter",
+            "sum",
+            "min",
+            "max",
+            "abs",
+            "round",
+            "int",
+            "float",
+            "str",
+            "bool",
+            "list",
+            "dict",
+            "tuple",
+            "set",
+            "print",
+            "type",
+            "isinstance",
+            "hasattr",
         ];
-        
+
         let builtins = py.import("builtins")?;
         let restricted_builtins = PyDict::new(py);
-        
+
         for builtin_name in safe_builtins {
             if let Ok(builtin_func) = builtins.getattr(builtin_name) {
                 restricted_builtins.set_item(builtin_name, builtin_func)?;
             }
         }
-        
+
         globals.set_item("__builtins__", restricted_builtins)?;
-        
+
         // Add allowed modules if they're in the whitelist
         for module_name in &self.constraints.allowed_imports {
             if let Ok(module) = py.import(module_name) {
                 globals.set_item(module_name, module)?;
             }
         }
-        
+
         Ok(globals)
     }
 
@@ -507,17 +532,17 @@ impl PythonSandbox {
         constraints: &PythonConstraints,
     ) -> PyResult<()> {
         let start_time = Instant::now();
-        
+
         // Execute the code
         py.run(code, Some(globals), Some(locals))?;
-        
+
         // Check if timeout exceeded
         if start_time.elapsed() > Duration::from_millis(constraints.max_execution_time_ms) {
             return Err(PyErr::new::<pyo3::exceptions::PyTimeoutError, _>(
-                "Execution timeout exceeded"
+                "Execution timeout exceeded",
             ));
         }
-        
+
         Ok(())
     }
 
@@ -534,18 +559,18 @@ impl PythonSandbox {
         input_tensors: &[(String, TensorId)],
     ) -> Result<HashMap<String, Vec<f32>>, PythonError> {
         let mut context = HashMap::new();
-        
+
         for (name, tensor_id) in input_tensors {
             // In a real implementation, this would fetch actual tensor data
             // For now, provide placeholder data
             let placeholder_data = vec![1.0, 2.0, 3.0, 4.0];
             context.insert(name.clone(), placeholder_data);
-            
+
             // Track active tensors
             let mut monitor = self.resource_monitor.lock();
             monitor.active_tensors.insert(name.clone(), *tensor_id);
         }
-        
+
         Ok(context)
     }
 
@@ -556,13 +581,13 @@ impl PythonSandbox {
         output_tensors: &[(String, TensorId)],
     ) -> Result<HashMap<String, Vec<f32>>, PythonError> {
         let mut output_data = HashMap::new();
-        
+
         // In a real implementation, this would extract tensors from Python locals
         for (name, _tensor_id) in output_tensors {
             let placeholder_output = vec![0.5, 0.6, 0.7, 0.8];
             output_data.insert(name.clone(), placeholder_output);
         }
-        
+
         Ok(output_data)
     }
 
@@ -570,13 +595,13 @@ impl PythonSandbox {
     fn check_constraints(&self, constraints: &PythonConstraints) -> Result<(), PythonError> {
         if constraints.max_memory_mb > self.constraints.max_memory_mb {
             return Err(PythonError::ResourceLimitExceeded(
-                "Memory limit exceeds sandbox maximum".to_string()
+                "Memory limit exceeds sandbox maximum".to_string(),
             ));
         }
 
         if constraints.max_execution_time_ms > self.constraints.max_execution_time_ms {
             return Err(PythonError::ResourceLimitExceeded(
-                "Execution time limit exceeds sandbox maximum".to_string()
+                "Execution time limit exceeds sandbox maximum".to_string(),
             ));
         }
 
@@ -584,10 +609,15 @@ impl PythonSandbox {
     }
 
     /// Update comprehensive execution statistics
-    fn update_execution_stats(&mut self, start_time: Instant, success: bool, security_violation: bool) {
+    fn update_execution_stats(
+        &mut self,
+        start_time: Instant,
+        success: bool,
+        security_violation: bool,
+    ) {
         let mut stats = self.execution_stats.lock();
         stats.total_executions += 1;
-        
+
         if success {
             stats.successful_executions += 1;
         } else {
@@ -597,10 +627,10 @@ impl PythonSandbox {
         if security_violation {
             stats.security_violations += 1;
         }
-        
+
         let execution_time = start_time.elapsed();
         stats.total_execution_time += execution_time;
-        
+
         if let Some(current_memory) = self.get_current_memory_usage() {
             stats.peak_memory_usage = stats.peak_memory_usage.max(current_memory);
         }
@@ -630,14 +660,14 @@ impl ImportValidator {
         if self.blocked_patterns.iter().any(|blocked| module_name.contains(blocked)) {
             return false;
         }
-        
+
         // Check if module is in allowed list (including submodules)
         if self.allowed_imports.iter().any(|allowed| {
             module_name == allowed || module_name.starts_with(&format!("{}.", allowed))
         }) {
             return true;
         }
-        
+
         // Default deny for unlisted modules
         false
     }
@@ -687,7 +717,7 @@ mod tests {
     fn test_comprehensive_code_validation() {
         let constraints = PythonConstraints::default();
         let sandbox = PythonSandbox::new(constraints).unwrap();
-        
+
         let safe_code = r#"
 import torch
 import numpy as np
@@ -696,7 +726,7 @@ def train_model(x, y):
     model = torch.nn.Linear(10, 1)
     return model(x)
 "#;
-        
+
         let validation = sandbox.validate_code_comprehensive(safe_code);
         assert!(validation.is_ok());
         let validation = validation.unwrap();
@@ -709,7 +739,7 @@ def train_model(x, y):
     fn test_security_violation_detection() {
         let constraints = PythonConstraints::default();
         let sandbox = PythonSandbox::new(constraints).unwrap();
-        
+
         let unsafe_code = r#"
 import os
 import subprocess
@@ -718,21 +748,27 @@ os.system("rm -rf /")
 subprocess.run(["curl", "http://malicious.com"])
 eval("malicious_code")
 "#;
-        
+
         let validation = sandbox.validate_code_comprehensive(unsafe_code);
         assert!(validation.is_ok());
         let validation = validation.unwrap();
         assert!(!validation.is_safe);
         assert!(!validation.violations.is_empty());
-        
+
         // Check for specific violation types
-        let has_import_violation = validation.violations.iter()
+        let has_import_violation = validation
+            .violations
+            .iter()
             .any(|v| matches!(v.violation_type, ViolationType::DisallowedImport));
-        let has_system_call = validation.violations.iter()
+        let has_system_call = validation
+            .violations
+            .iter()
             .any(|v| matches!(v.violation_type, ViolationType::SystemCall));
-        let has_dangerous_function = validation.violations.iter()
+        let has_dangerous_function = validation
+            .violations
+            .iter()
             .any(|v| matches!(v.violation_type, ViolationType::DangerousFunction));
-            
+
         assert!(has_import_violation);
         assert!(has_system_call);
         assert!(has_dangerous_function);
@@ -742,14 +778,14 @@ eval("malicious_code")
     fn test_import_validation_detailed() {
         let validator = ImportValidator {
             allowed_imports: vec![
-                "torch".to_string(), 
-                "numpy".to_string(), 
-                "transformers".to_string()
+                "torch".to_string(),
+                "numpy".to_string(),
+                "transformers".to_string(),
             ],
             blocked_patterns: vec!["os".to_string(), "sys".to_string()],
             dangerous_functions: vec!["eval".to_string()],
         };
-        
+
         assert!(validator.is_import_allowed("torch"));
         assert!(validator.is_import_allowed("torch.nn"));
         assert!(validator.is_import_allowed("numpy"));
@@ -758,4 +794,4 @@ eval("malicious_code")
         assert!(!validator.is_import_allowed("sys"));
         assert!(!validator.is_import_allowed("random_unknown_module"));
     }
-} 
+}

@@ -1,5 +1,5 @@
 use devnet::load_jobs;
-use runtime::job_manager::Job;
+use devnet::Job;
 use tiny_http::{Response, Server};
 
 /// Render a list of jobs as simple HTML.

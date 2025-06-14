@@ -1,9 +1,9 @@
 //! High-Level ML Instructions
-//! 
+//!
 //! This module provides high-level ML operations that can be executed
 //! efficiently using native implementations or by delegating to frameworks.
 
-use crate::{VmError, TensorId, DataType, enhanced_vm::TrainingMetrics};
+use crate::{enhanced_vm::TrainingMetrics, TensorId, VmError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -29,14 +29,14 @@ pub enum MLOperation {
         targets: TensorId,
         config: TrainingConfig,
     },
-    
+
     // Inference operations
     Predict {
         model_id: String,
         input: TensorId,
         output: TensorId,
     },
-    
+
     // Model operations
     SaveModel {
         model_id: String,
@@ -46,14 +46,14 @@ pub enum MLOperation {
         model_id: String,
         path: String,
     },
-    
+
     // Data operations
     PreprocessData {
         input: TensorId,
         operations: Vec<PreprocessingOperation>,
         output: TensorId,
     },
-    
+
     // Evaluation operations
     EvaluateModel {
         model_id: String,
@@ -228,43 +228,39 @@ pub struct MLInstructionExecutor {
 impl MLInstructionExecutor {
     /// Create new ML instruction executor
     pub fn new() -> Self {
-        Self {
-            models: HashMap::new(),
-            model_weights: HashMap::new(),
-        }
+        Self { models: HashMap::new(), model_weights: HashMap::new() }
     }
 
     /// Execute a high-level ML operation
-    pub fn execute_operation(&mut self, operation: &MLOperation) -> Result<MLOperationResult, VmError> {
+    pub fn execute_operation(
+        &mut self,
+        operation: &MLOperation,
+    ) -> Result<MLOperationResult, VmError> {
         match operation {
             MLOperation::TrainLinearRegression { features, targets, learning_rate, epochs } => {
                 self.train_linear_regression(*features, *targets, *learning_rate, *epochs)
             }
-            
+
             MLOperation::TrainLogisticRegression { features, targets, learning_rate, epochs } => {
                 self.train_logistic_regression(*features, *targets, *learning_rate, *epochs)
             }
-            
+
             MLOperation::TrainNeuralNetwork { architecture, features, targets, config } => {
                 self.train_neural_network(architecture, *features, *targets, config)
             }
-            
+
             MLOperation::Predict { model_id, input, output } => {
                 self.predict(model_id, *input, *output)
             }
-            
-            MLOperation::SaveModel { model_id, path } => {
-                self.save_model(model_id, path)
-            }
-            
-            MLOperation::LoadModel { model_id, path } => {
-                self.load_model(model_id, path)
-            }
-            
+
+            MLOperation::SaveModel { model_id, path } => self.save_model(model_id, path),
+
+            MLOperation::LoadModel { model_id, path } => self.load_model(model_id, path),
+
             MLOperation::PreprocessData { input, operations, output } => {
                 self.preprocess_data(*input, operations, *output)
             }
-            
+
             MLOperation::EvaluateModel { model_id, test_features, test_targets, metrics } => {
                 self.evaluate_model(model_id, *test_features, *test_targets, metrics)
             }
@@ -280,10 +276,10 @@ impl MLInstructionExecutor {
         epochs: u32,
     ) -> Result<MLOperationResult, VmError> {
         // Placeholder implementation
-        let model_id = format!("linear_regression_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
+        let model_id = format!(
+            "linear_regression_{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        );
 
         let training_result = TrainingResult {
             model_id: model_id.clone(),
@@ -312,10 +308,10 @@ impl MLInstructionExecutor {
         epochs: u32,
     ) -> Result<MLOperationResult, VmError> {
         // Placeholder implementation
-        let model_id = format!("logistic_regression_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
+        let model_id = format!(
+            "logistic_regression_{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        );
 
         let training_result = TrainingResult {
             model_id: model_id.clone(),
@@ -344,10 +340,10 @@ impl MLInstructionExecutor {
         config: &TrainingConfig,
     ) -> Result<MLOperationResult, VmError> {
         // Placeholder implementation
-        let model_id = format!("neural_network_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs());
+        let model_id = format!(
+            "neural_network_{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        );
 
         // Store model info
         let model_info = ModelInfo {
@@ -396,9 +392,7 @@ impl MLInstructionExecutor {
         output: TensorId,
     ) -> Result<MLOperationResult, VmError> {
         if !self.models.contains_key(model_id) {
-            return Err(VmError::MLInstructionError(
-                format!("Model {} not found", model_id)
-            ));
+            return Err(VmError::MLInstructionError(format!("Model {} not found", model_id)));
         }
 
         // Placeholder implementation
@@ -414,9 +408,7 @@ impl MLInstructionExecutor {
     /// Save model to storage
     fn save_model(&self, model_id: &str, _path: &str) -> Result<MLOperationResult, VmError> {
         if !self.models.contains_key(model_id) {
-            return Err(VmError::MLInstructionError(
-                format!("Model {} not found", model_id)
-            ));
+            return Err(VmError::MLInstructionError(format!("Model {} not found", model_id)));
         }
 
         // Placeholder implementation
@@ -449,9 +441,7 @@ impl MLInstructionExecutor {
         _metrics: &[EvaluationMetric],
     ) -> Result<MLOperationResult, VmError> {
         if !self.models.contains_key(model_id) {
-            return Err(VmError::MLInstructionError(
-                format!("Model {} not found", model_id)
-            ));
+            return Err(VmError::MLInstructionError(format!("Model {} not found", model_id)));
         }
 
         // Placeholder implementation
@@ -511,7 +501,7 @@ mod tests {
     #[test]
     fn test_linear_regression_training() {
         let mut executor = MLInstructionExecutor::new();
-        
+
         let operation = MLOperation::TrainLinearRegression {
             features: TensorId(1),
             targets: TensorId(2),
@@ -521,7 +511,7 @@ mod tests {
 
         let result = executor.execute_operation(&operation);
         assert!(result.is_ok());
-        
+
         if let Ok(MLOperationResult::Training(training_result)) = result {
             assert_eq!(training_result.final_metrics.epoch, 100);
             assert!(training_result.converged);
@@ -533,17 +523,15 @@ mod tests {
     #[test]
     fn test_neural_network_training() {
         let mut executor = MLInstructionExecutor::new();
-        
+
         let architecture = NetworkArchitecture {
             input_size: 784,
-            hidden_layers: vec![
-                LayerSpec {
-                    layer_type: LayerType::Dense,
-                    size: 128,
-                    activation: Some("relu".to_string()),
-                    dropout: Some(0.2),
-                }
-            ],
+            hidden_layers: vec![LayerSpec {
+                layer_type: LayerType::Dense,
+                size: 128,
+                activation: Some("relu".to_string()),
+                dropout: Some(0.2),
+            }],
             output_size: 10,
             activation: "softmax".to_string(),
             dropout_rate: None,
@@ -573,7 +561,7 @@ mod tests {
 
         let result = executor.execute_operation(&operation);
         assert!(result.is_ok());
-        
+
         if let Ok(MLOperationResult::Training(training_result)) = result {
             assert_eq!(training_result.final_metrics.epoch, 10);
             assert!(training_result.converged);
@@ -581,4 +569,4 @@ mod tests {
             panic!("Expected training result");
         }
     }
-} 
+}

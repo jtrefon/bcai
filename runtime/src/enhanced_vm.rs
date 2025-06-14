@@ -1,5 +1,5 @@
 //! Enhanced Virtual Machine for ML Workloads
-//! 
+//!
 //! This module implements a hybrid VM that supports:
 //! - Native ML instructions for high performance
 //! - Python code execution for ecosystem compatibility  
@@ -7,13 +7,13 @@
 //! - Distributed training coordination
 
 use crate::{
-    VmError, MLInstruction, TensorId, DataType, TensorOperation, ActivationFunction,
-    PythonConstraints, hardware_abstraction::HardwareBackend, 
-    tensor_ops::TensorManager, python_bridge::PythonSandbox
+    hardware_abstraction::HardwareBackend, python_bridge::PythonSandbox, tensor_ops::TensorManager,
+    ActivationFunction, MLInstruction, PythonConstraints, TensorId, TensorOperation,
+    VmError,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 
 /// Configuration for the enhanced VM
 #[derive(Debug, Clone)]
@@ -103,12 +103,15 @@ impl EnhancedVM {
 
     /// Create a new enhanced VM with custom configuration
     pub fn with_config(config: EnhancedVMConfig) -> Result<Self, VmError> {
-        let hardware_backend = crate::hardware_abstraction::create_backend(&config.hardware_backend)
-            .map_err(|e| VmError::HardwareError(e.to_string()))?;
+        let hardware_backend =
+            crate::hardware_abstraction::create_backend(&config.hardware_backend)
+                .map_err(|e| VmError::HardwareError(e.to_string()))?;
 
         let python_sandbox = if config.enable_python {
-            Some(PythonSandbox::new(config.python_constraints.clone())
-                .map_err(|e| VmError::PythonError(e.to_string()))?)
+            Some(
+                PythonSandbox::new(config.python_constraints.clone())
+                    .map_err(|e| VmError::PythonError(e.to_string()))?,
+            )
         } else {
             None
         };
@@ -138,7 +141,10 @@ impl EnhancedVM {
     }
 
     /// Execute a sequence of ML instructions
-    pub fn execute_program(&mut self, instructions: &[MLInstruction]) -> Result<ExecutionResult, VmError> {
+    pub fn execute_program(
+        &mut self,
+        instructions: &[MLInstruction],
+    ) -> Result<ExecutionResult, VmError> {
         let start_time = Instant::now();
         let mut output_tensors = HashMap::new();
         let mut training_metrics = None;
@@ -147,7 +153,7 @@ impl EnhancedVM {
             // Check execution timeout
             if start_time.elapsed() > self.config.max_execution_time {
                 return Err(VmError::ResourceLimitExceeded(
-                    "Execution timeout exceeded".to_string()
+                    "Execution timeout exceeded".to_string(),
                 ));
             }
 
@@ -195,13 +201,22 @@ impl EnhancedVM {
     }
 
     /// Execute a single ML instruction
-    pub fn execute_instruction(&mut self, instruction: &MLInstruction) -> Result<InstructionResult, VmError> {
+    pub fn execute_instruction(
+        &mut self,
+        instruction: &MLInstruction,
+    ) -> Result<InstructionResult, VmError> {
         match instruction {
             // Legacy basic instructions
-            MLInstruction::Push(_) | MLInstruction::Add | MLInstruction::Sub |
-            MLInstruction::Mul | MLInstruction::Div | MLInstruction::Dup |
-            MLInstruction::Swap | MLInstruction::Store(_) | MLInstruction::Load(_) |
-            MLInstruction::Halt => {
+            MLInstruction::Push(_)
+            | MLInstruction::Add
+            | MLInstruction::Sub
+            | MLInstruction::Mul
+            | MLInstruction::Div
+            | MLInstruction::Dup
+            | MLInstruction::Swap
+            | MLInstruction::Store(_)
+            | MLInstruction::Load(_)
+            | MLInstruction::Halt => {
                 // Convert to legacy instruction and execute with original VM
                 self.execute_legacy_instruction(instruction)
             }
@@ -222,21 +237,72 @@ impl EnhancedVM {
             }
 
             // Neural network primitives
-            MLInstruction::Linear { in_features, out_features, weight_id, bias_id, input_id, output_id } => {
-                self.execute_linear_layer(*in_features, *out_features, *weight_id, *bias_id, *input_id, *output_id)
-            }
+            MLInstruction::Linear {
+                in_features,
+                out_features,
+                weight_id,
+                bias_id,
+                input_id,
+                output_id,
+            } => self.execute_linear_layer(
+                *in_features,
+                *out_features,
+                *weight_id,
+                *bias_id,
+                *input_id,
+                *output_id,
+            ),
 
-            MLInstruction::Conv2D { in_channels, out_channels, kernel_size, stride, padding, weight_id, bias_id, input_id, output_id } => {
-                self.execute_conv2d(*in_channels, *out_channels, *kernel_size, *stride, *padding, *weight_id, *bias_id, *input_id, *output_id)
-            }
+            MLInstruction::Conv2D {
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride,
+                padding,
+                weight_id,
+                bias_id,
+                input_id,
+                output_id,
+            } => self.execute_conv2d(
+                *in_channels,
+                *out_channels,
+                *kernel_size,
+                *stride,
+                *padding,
+                *weight_id,
+                *bias_id,
+                *input_id,
+                *output_id,
+            ),
 
-            MLInstruction::LSTM { input_size, hidden_size, num_layers, input_id, hidden_id, cell_id, output_id } => {
-                self.execute_lstm(*input_size, *hidden_size, *num_layers, *input_id, *hidden_id, *cell_id, *output_id)
-            }
+            MLInstruction::LSTM {
+                input_size,
+                hidden_size,
+                num_layers,
+                input_id,
+                hidden_id,
+                cell_id,
+                output_id,
+            } => self.execute_lstm(
+                *input_size,
+                *hidden_size,
+                *num_layers,
+                *input_id,
+                *hidden_id,
+                *cell_id,
+                *output_id,
+            ),
 
-            MLInstruction::Attention { embed_dim, num_heads, query_id, key_id, value_id, output_id } => {
-                self.execute_attention(*embed_dim, *num_heads, *query_id, *key_id, *value_id, *output_id)
-            }
+            MLInstruction::Attention {
+                embed_dim,
+                num_heads,
+                query_id,
+                key_id,
+                value_id,
+                output_id,
+            } => self.execute_attention(
+                *embed_dim, *num_heads, *query_id, *key_id, *value_id, *output_id,
+            ),
 
             // Activation functions
             MLInstruction::Activation { function, input_id, output_id } => {
@@ -248,25 +314,44 @@ impl EnhancedVM {
                 self.execute_sgd_step(*param_id, *grad_id, *lr, *momentum)
             }
 
-            MLInstruction::AdamStep { param_id, grad_id, moment1_id, moment2_id, lr, beta1, beta2, epsilon } => {
-                self.execute_adam_step(*param_id, *grad_id, *moment1_id, *moment2_id, *lr, *beta1, *beta2, *epsilon)
-            }
+            MLInstruction::AdamStep {
+                param_id,
+                grad_id,
+                moment1_id,
+                moment2_id,
+                lr,
+                beta1,
+                beta2,
+                epsilon,
+            } => self.execute_adam_step(
+                *param_id,
+                *grad_id,
+                *moment1_id,
+                *moment2_id,
+                *lr,
+                *beta1,
+                *beta2,
+                *epsilon,
+            ),
 
             // Hardware operations
             MLInstruction::ToGPU { tensor_id } => {
-                self.hardware_backend.move_to_gpu(*tensor_id)
+                self.hardware_backend
+                    .move_to_gpu(*tensor_id)
                     .map_err(|e| VmError::HardwareError(e.to_string()))?;
                 Ok(InstructionResult::default())
             }
 
             MLInstruction::ToCPU { tensor_id } => {
-                self.hardware_backend.move_to_cpu(*tensor_id)
+                self.hardware_backend
+                    .move_to_cpu(*tensor_id)
                     .map_err(|e| VmError::HardwareError(e.to_string()))?;
                 Ok(InstructionResult::default())
             }
 
             MLInstruction::Synchronize => {
-                self.hardware_backend.synchronize()
+                self.hardware_backend
+                    .synchronize()
                     .map_err(|e| VmError::HardwareError(e.to_string()))?;
                 Ok(InstructionResult::default())
             }
@@ -299,62 +384,133 @@ impl EnhancedVM {
     fn compute_model_hash(&self) -> Option<String> {
         // Implementation would hash all tensor states
         // For now, return a placeholder
-        Some(format!("model_hash_{}", 
-            self.execution_context.as_ref()
-                .map(|ctx| ctx.instruction_count)
-                .unwrap_or(0)
+        Some(format!(
+            "model_hash_{}",
+            self.execution_context.as_ref().map(|ctx| ctx.instruction_count).unwrap_or(0)
         ))
     }
 
     // Private implementation methods would go here...
-    fn execute_legacy_instruction(&mut self, _instruction: &MLInstruction) -> Result<InstructionResult, VmError> {
+    fn execute_legacy_instruction(
+        &mut self,
+        _instruction: &MLInstruction,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_tensor_operation(&mut self, _op: &TensorOperation, _inputs: &[TensorId], _output: TensorId) -> Result<InstructionResult, VmError> {
+    fn execute_tensor_operation(
+        &mut self,
+        _op: &TensorOperation,
+        _inputs: &[TensorId],
+        _output: TensorId,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_linear_layer(&mut self, _in_features: usize, _out_features: usize, _weight_id: TensorId, _bias_id: Option<TensorId>, _input_id: TensorId, _output_id: TensorId) -> Result<InstructionResult, VmError> {
+    fn execute_linear_layer(
+        &mut self,
+        _in_features: usize,
+        _out_features: usize,
+        _weight_id: TensorId,
+        _bias_id: Option<TensorId>,
+        _input_id: TensorId,
+        _output_id: TensorId,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_conv2d(&mut self, _in_channels: usize, _out_channels: usize, _kernel_size: (usize, usize), _stride: (usize, usize), _padding: (usize, usize), _weight_id: TensorId, _bias_id: Option<TensorId>, _input_id: TensorId, _output_id: TensorId) -> Result<InstructionResult, VmError> {
+    fn execute_conv2d(
+        &mut self,
+        _in_channels: usize,
+        _out_channels: usize,
+        _kernel_size: (usize, usize),
+        _stride: (usize, usize),
+        _padding: (usize, usize),
+        _weight_id: TensorId,
+        _bias_id: Option<TensorId>,
+        _input_id: TensorId,
+        _output_id: TensorId,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_lstm(&mut self, _input_size: usize, _hidden_size: usize, _num_layers: usize, _input_id: TensorId, _hidden_id: TensorId, _cell_id: TensorId, _output_id: TensorId) -> Result<InstructionResult, VmError> {
+    fn execute_lstm(
+        &mut self,
+        _input_size: usize,
+        _hidden_size: usize,
+        _num_layers: usize,
+        _input_id: TensorId,
+        _hidden_id: TensorId,
+        _cell_id: TensorId,
+        _output_id: TensorId,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_attention(&mut self, _embed_dim: usize, _num_heads: usize, _query_id: TensorId, _key_id: TensorId, _value_id: TensorId, _output_id: TensorId) -> Result<InstructionResult, VmError> {
+    fn execute_attention(
+        &mut self,
+        _embed_dim: usize,
+        _num_heads: usize,
+        _query_id: TensorId,
+        _key_id: TensorId,
+        _value_id: TensorId,
+        _output_id: TensorId,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_activation(&mut self, _function: &ActivationFunction, _input_id: TensorId, _output_id: TensorId) -> Result<InstructionResult, VmError> {
+    fn execute_activation(
+        &mut self,
+        _function: &ActivationFunction,
+        _input_id: TensorId,
+        _output_id: TensorId,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_sgd_step(&mut self, _param_id: TensorId, _grad_id: TensorId, _lr: f32, _momentum: f32) -> Result<InstructionResult, VmError> {
+    fn execute_sgd_step(
+        &mut self,
+        _param_id: TensorId,
+        _grad_id: TensorId,
+        _lr: f32,
+        _momentum: f32,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_adam_step(&mut self, _param_id: TensorId, _grad_id: TensorId, _moment1_id: TensorId, _moment2_id: TensorId, _lr: f32, _beta1: f32, _beta2: f32, _epsilon: f32) -> Result<InstructionResult, VmError> {
+    fn execute_adam_step(
+        &mut self,
+        _param_id: TensorId,
+        _grad_id: TensorId,
+        _moment1_id: TensorId,
+        _moment2_id: TensorId,
+        _lr: f32,
+        _beta1: f32,
+        _beta2: f32,
+        _epsilon: f32,
+    ) -> Result<InstructionResult, VmError> {
         // Placeholder implementation
         Ok(InstructionResult::default())
     }
 
-    fn execute_python_code(&mut self, code: &str, input_tensors: &[(String, TensorId)], output_tensors: &[(String, TensorId)], constraints: &PythonConstraints) -> Result<InstructionResult, VmError> {
+    fn execute_python_code(
+        &mut self,
+        code: &str,
+        input_tensors: &[(String, TensorId)],
+        output_tensors: &[(String, TensorId)],
+        constraints: &PythonConstraints,
+    ) -> Result<InstructionResult, VmError> {
         if let Some(ref mut sandbox) = self.python_sandbox {
-            sandbox.execute_code(code, input_tensors, output_tensors, constraints)
+            sandbox
+                .execute_code(code, input_tensors, output_tensors, constraints)
                 .map_err(|e| VmError::PythonError(e.to_string()))
         } else {
             Err(VmError::PythonError("Python execution disabled".to_string()))
@@ -399,4 +555,4 @@ mod tests {
         vm.start_execution("job1".to_string(), "node1".to_string());
         assert!(vm.execution_context.is_some());
     }
-} 
+}

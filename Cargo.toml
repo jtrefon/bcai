@@ -1,19 +1,22 @@
 [workspace]
 members = [
     "runtime",
-    "p2p", 
     "devnet",
     "keygen",
-    "jobmanager",
-    "dashboard"
+    "jobmanager", 
+    "dashboard",
+    "p2p",
 ]
-resolver = "2"
 
 [workspace.dependencies]
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
 # Shared dependencies across workspace
-thiserror = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 wgpu = "25"
 pollster = "0.3"
 bytemuck = { version = "1.14", features = ["derive"] }
@@ -22,8 +25,6 @@ sha2 = "0.10"
 smartcore = { version = "0.4", default-features = false, features = ["datasets"] }
 rayon = "1"
 chrono = { version = "0.4.41", features = ["serde"] }
-clap = { version = "4.0", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
 
 # Main BCAI binary package
 [package]
@@ -31,22 +32,24 @@ name = "bcai"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "bcai"
+path = "src/lib.rs"
+
 [dependencies]
-runtime = { path = "runtime" }
-p2p = { path = "p2p" }
-devnet = { path = "devnet" }
-keygen = { path = "keygen" }
 jobmanager = { path = "jobmanager" }
+keygen = { path = "keygen" }
 tokio = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-[[bin]]
-name = "bcai"
-path = "bcai-cli.rs"
+# Temporarily disabled problematic binaries
+# [[bin]]
+# name = "bcai"
+# path = "bcai-cli.rs"
 
-[[bin]]
-name = "blockchain"
-path = "runtime/src/bin/blockchain.rs"
-doc = false 
+# [[bin]]
+# name = "blockchain"
+# path = "runtime/src/bin/blockchain.rs"
+# doc = false 

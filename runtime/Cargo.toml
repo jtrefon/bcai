@@ -3,55 +3,56 @@ name = "runtime"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "runtime"
+path = "src/lib.rs"
+
 [[bin]]
 name = "runtime"
 path = "src/bin/runtime.rs"
 
-[[bin]]
+[[bin]] 
 name = "vm_test_runner"
 path = "src/bin/vm_test_runner.rs"
 
-[dependencies]
-thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-wgpu = "25"
-pollster = "0.3"
-bytemuck = { version = "1.14", features = ["derive"] }
-rand = "0.8"
-sha2 = "0.10"
-smartcore = { version = "0.3.0", features = ["datasets"] }
-rayon = "1.7"
-chrono = { version = "0.4.41", features = ["serde"] }
-clap = { version = "4.0", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
-num-complex = "0.4"
-pyo3 = { version = "0.22", features = ["auto-initialize"] }
-ndarray = "0.15"
-candle-core = "0.9"
-candle-nn = "0.9"
-tch = { version = "0.15", optional = true }
-cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }
-metal = { version = "0.27", optional = true }
-libc = "0.2"
-dashmap = "5.5"
-crossbeam = "0.8"
-parking_lot = "0.12"
-mimalloc = { version = "0.1", default-features = false }
-
-[dev-dependencies]
-keygen_lib = { package = "keygen", path = "../keygen" }
-criterion = "0.5"
-proptest = "1.0"
-tokio-test = "0.4"
-
 [features]
-default = ["enhanced-vm"]
-enhanced-vm = []
-cuda = ["cuda-runtime-sys", "tch"]
+default = []
+enhanced-vm = ["pyo3", "tch", "candle-core"]
+cuda = ["tch/cuda"]
 metal-gpu = ["metal"]
 pytorch = ["tch"]
 
+[dependencies]
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+clap = { version = "4.0", features = ["derive"] }
+
+# Essential for blockchain
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Enhanced VM dependencies
+num-complex = "0.4"
+rayon = "1.7"
+ndarray = "0.15"
+
+# Optional ML dependencies
+pyo3 = { version = "0.20", features = ["auto-initialize"], optional = true }
+tch = { version = "0.13", optional = true }
+candle-core = { version = "0.3", optional = true }
+metal = { version = "0.27", optional = true }
+
+# Hardware abstraction
+wgpu = "0.18"
+bytemuck = { version = "1.14", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
 [[bench]]
-name = "tensor_operations"
+name = "vm_benchmarks"
 harness = false
