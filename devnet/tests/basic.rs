@@ -45,3 +45,13 @@ fn slash_and_reputation_flow() -> Result<(), runtime::token::LedgerError> {
     assert_eq!(ledger.balance(TREASURY), 25);
     Ok(())
 }
+
+#[test]
+fn burn_flow() -> Result<(), runtime::token::LedgerError> {
+    let mut ledger = TokenLedger::new();
+    mint(&mut ledger, "alice", 60);
+    burn(&mut ledger, "alice", 20)?;
+    assert_eq!(ledger.balance("alice"), 40);
+    assert!(burn(&mut ledger, "alice", 50).is_err());
+    Ok(())
+}

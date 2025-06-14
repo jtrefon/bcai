@@ -88,6 +88,10 @@ pub fn adjust_reputation(ledger: &mut TokenLedger, account: &str, delta: i32) {
     ledger.adjust_reputation(account, delta);
 }
 
+pub fn burn(ledger: &mut TokenLedger, account: &str, amount: u64) -> Result<(), LedgerError> {
+    ledger.burn(account, amount)
+}
+
 pub fn train_and_verify(size: usize, seed: u64, difficulty: u32) -> bool {
     use runtime::evaluator::Evaluator;
     use runtime::pouw::generate_task;
