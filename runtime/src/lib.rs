@@ -63,11 +63,7 @@ pub struct VmConfig {
 
 impl Default for VmConfig {
     fn default() -> Self {
-        Self {
-            max_stack_size: 1024,
-            max_memory_size: 1024,
-            max_instructions: 10000,
-        }
+        Self { max_stack_size: 1024, max_memory_size: 1024, max_instructions: 10000 }
     }
 }
 
@@ -208,19 +204,22 @@ impl Vm {
     }
 
     /// Execute a program with step-by-step debugging.
-    pub fn execute_debug(&mut self, program: &[Instruction]) -> Result<Vec<(Instruction, i64)>, VmError> {
+    pub fn execute_debug(
+        &mut self,
+        program: &[Instruction],
+    ) -> Result<Vec<(Instruction, i64)>, VmError> {
         let mut trace = Vec::new();
-        
+
         for instruction in program {
             self.execute_instruction(instruction)?;
             let top = self.stack.last().cloned().unwrap_or(0);
             trace.push((instruction.clone(), top));
-            
+
             if matches!(instruction, Instruction::Halt) {
                 break;
             }
         }
-        
+
         Ok(trace)
     }
 }
@@ -245,11 +244,7 @@ mod tests {
 
     #[test]
     fn vm_with_custom_config() {
-        let config = VmConfig {
-            max_stack_size: 100,
-            max_memory_size: 50,
-            max_instructions: 1000,
-        };
+        let config = VmConfig { max_stack_size: 100, max_memory_size: 50, max_instructions: 1000 };
         let vm = Vm::with_config(config);
         assert_eq!(vm.config.max_stack_size, 100);
         assert_eq!(vm.config.max_memory_size, 50);
@@ -315,12 +310,8 @@ mod tests {
     #[test]
     fn swap_instruction() -> Result<(), VmError> {
         let mut vm = Vm::new();
-        let program = [
-            Instruction::Push(10),
-            Instruction::Push(20),
-            Instruction::Swap,
-            Instruction::Sub,
-        ];
+        let program =
+            [Instruction::Push(10), Instruction::Push(20), Instruction::Swap, Instruction::Sub];
         assert_eq!(vm.execute(&program)?, 10);
         Ok(())
     }
@@ -390,17 +381,13 @@ mod tests {
 
     #[test]
     fn stack_overflow_protection() {
-        let config = VmConfig {
-            max_stack_size: 2,
-            max_memory_size: 1024,
-            max_instructions: 1000,
-        };
+        let config = VmConfig { max_stack_size: 2, max_memory_size: 1024, max_instructions: 1000 };
         let mut vm = Vm::with_config(config);
-        
+
         // Fill stack to capacity
         vm.execute_instruction(&Instruction::Push(1)).unwrap();
         vm.execute_instruction(&Instruction::Push(2)).unwrap();
-        
+
         // Next push should fail
         assert_eq!(
             vm.execute_instruction(&Instruction::Push(3)).unwrap_err(),
@@ -410,24 +397,20 @@ mod tests {
 
     #[test]
     fn memory_address_bounds_checking() {
-        let config = VmConfig {
-            max_stack_size: 1024,
-            max_memory_size: 10,
-            max_instructions: 1000,
-        };
+        let config = VmConfig { max_stack_size: 1024, max_memory_size: 10, max_instructions: 1000 };
         let mut vm = Vm::with_config(config);
-        
+
         // Valid memory access
         vm.execute_instruction(&Instruction::Push(42)).unwrap();
         vm.execute_instruction(&Instruction::Store(9)).unwrap(); // Within bounds
-        
+
         // Invalid memory access
         vm.execute_instruction(&Instruction::Push(42)).unwrap();
         assert_eq!(
             vm.execute_instruction(&Instruction::Store(10)).unwrap_err(),
             VmError::InvalidMemoryAddress(10)
         );
-        
+
         // Invalid load
         assert_eq!(
             vm.execute_instruction(&Instruction::Load(10)).unwrap_err(),
@@ -437,17 +420,13 @@ mod tests {
 
     #[test]
     fn instruction_count_limit() {
-        let config = VmConfig {
-            max_stack_size: 1024,
-            max_memory_size: 1024,
-            max_instructions: 2,
-        };
+        let config = VmConfig { max_stack_size: 1024, max_memory_size: 1024, max_instructions: 2 };
         let mut vm = Vm::with_config(config);
-        
+
         // Execute up to limit
         vm.execute_instruction(&Instruction::Push(1)).unwrap();
         vm.execute_instruction(&Instruction::Push(2)).unwrap();
-        
+
         // Next instruction should fail
         assert_eq!(
             vm.execute_instruction(&Instruction::Add).unwrap_err(),
@@ -458,79 +437,59 @@ mod tests {
     #[test]
     fn integer_overflow_protection() -> Result<(), VmError> {
         let mut vm = Vm::new();
-        
+
         // Test addition overflow protection (saturating)
-        let program = [
-            Instruction::Push(i64::MAX),
-            Instruction::Push(1),
-            Instruction::Add,
-        ];
+        let program = [Instruction::Push(i64::MAX), Instruction::Push(1), Instruction::Add];
         assert_eq!(vm.execute(&program)?, i64::MAX); // Should saturate
-        
+
         // Test subtraction underflow protection (saturating)
         vm.reset();
-        let program = [
-            Instruction::Push(i64::MIN),
-            Instruction::Push(1),
-            Instruction::Sub,
-        ];
+        let program = [Instruction::Push(i64::MIN), Instruction::Push(1), Instruction::Sub];
         assert_eq!(vm.execute(&program)?, i64::MIN); // Should saturate
-        
+
         // Test multiplication overflow protection (saturating)
         vm.reset();
-        let program = [
-            Instruction::Push(i64::MAX),
-            Instruction::Push(2),
-            Instruction::Mul,
-        ];
+        let program = [Instruction::Push(i64::MAX), Instruction::Push(2), Instruction::Mul];
         assert_eq!(vm.execute(&program)?, i64::MAX); // Should saturate
-        
+
         Ok(())
     }
 
     #[test]
     fn vm_reset_functionality() -> Result<(), VmError> {
         let mut vm = Vm::new();
-        
+
         // Execute some operations
-        vm.execute(&[
-            Instruction::Push(42),
-            Instruction::Store(0),
-            Instruction::Push(10),
-        ])?;
-        
+        vm.execute(&[Instruction::Push(42), Instruction::Store(0), Instruction::Push(10)])?;
+
         assert_eq!(vm.stack_size(), 1);
         assert_eq!(vm.memory_size(), 1);
         assert!(vm.instruction_count() > 0);
-        
+
         // Reset VM
         vm.reset();
-        
+
         assert_eq!(vm.stack_size(), 0);
         assert_eq!(vm.memory_size(), 0);
         assert_eq!(vm.instruction_count(), 0);
-        
+
         Ok(())
     }
 
     #[test]
     fn debug_execution_trace() -> Result<(), VmError> {
         let mut vm = Vm::new();
-        let program = [
-            Instruction::Push(10),
-            Instruction::Push(20),
-            Instruction::Add,
-            Instruction::Halt,
-        ];
-        
+        let program =
+            [Instruction::Push(10), Instruction::Push(20), Instruction::Add, Instruction::Halt];
+
         let trace = vm.execute_debug(&program)?;
-        
+
         assert_eq!(trace.len(), 4);
         assert_eq!(trace[0], (Instruction::Push(10), 10));
         assert_eq!(trace[1], (Instruction::Push(20), 20));
         assert_eq!(trace[2], (Instruction::Add, 30));
         assert_eq!(trace[3], (Instruction::Halt, 30));
-        
+
         Ok(())
     }
 
@@ -538,17 +497,17 @@ mod tests {
     fn load_from_uninitialized_memory() -> Result<(), VmError> {
         let mut vm = Vm::new();
         let program = [Instruction::Load(0), Instruction::Push(42), Instruction::Add];
-        
+
         // Loading from uninitialized memory should return 0
         assert_eq!(vm.execute(&program)?, 42);
-        
+
         Ok(())
     }
 
     #[test]
     fn complex_program_execution() -> Result<(), VmError> {
         let mut vm = Vm::new();
-        
+
         // Calculate (a + b) * (c - d) where a=10, b=20, c=30, d=5
         let program = [
             // Calculate a + b
@@ -556,18 +515,16 @@ mod tests {
             Instruction::Push(20), // b
             Instruction::Add,      // a + b = 30
             Instruction::Store(0), // Store result
-            
             // Calculate c - d
             Instruction::Push(30), // c
             Instruction::Push(5),  // d
             Instruction::Sub,      // c - d = 25
-            
             // Multiply results
-            Instruction::Load(0),  // Load a + b
-            Instruction::Swap,     // Swap to get correct order
-            Instruction::Mul,      // (a + b) * (c - d) = 30 * 25 = 750
+            Instruction::Load(0), // Load a + b
+            Instruction::Swap,    // Swap to get correct order
+            Instruction::Mul,     // (a + b) * (c - d) = 30 * 25 = 750
         ];
-        
+
         assert_eq!(vm.execute(&program)?, 750);
         Ok(())
     }

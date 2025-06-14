@@ -1,4 +1,4 @@
-use crate::pouw::{Solution, Task, solve};
+use crate::pouw::{solve, Solution, Task};
 
 /// Simple trainer node capable of solving Proof-of-Useful-Work tasks.
 #[derive(Debug, Clone)]

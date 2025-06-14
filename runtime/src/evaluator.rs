@@ -1,4 +1,4 @@
-use crate::pouw::{Solution, Task, verify};
+use crate::pouw::{verify, Solution, Task};
 
 /// Evaluator node responsible for verifying PoUW solutions.
 #[derive(Debug, Clone)]
