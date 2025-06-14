@@ -10,14 +10,14 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .long("port")
                 .value_name("PORT")
                 .help("Port to bind the dashboard server")
-                .default_value("8000")
+                .default_value("8000"),
         )
         .arg(
             Arg::new("host")
                 .long("host")
                 .value_name("HOST")
                 .help("Host address to bind the dashboard server")
-                .default_value("127.0.0.1")
+                .default_value("127.0.0.1"),
         )
         .get_matches();
 
@@ -27,6 +27,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("Starting BCAI Dashboard on {}", addr);
     println!("Visit http://{}/jobs to view active jobs", addr);
-    
+
     dashboard::serve(&addr)
 }
