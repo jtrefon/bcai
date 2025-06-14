@@ -9,6 +9,7 @@ pub struct Job {
     pub id: String,
     pub data: Vec<u8>,
     pub reward: u64,
+    pub worker: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -32,6 +33,8 @@ pub enum LedgerError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenLedger {
     pub balances: HashMap<String, u64>,
+    pub stakes: HashMap<String, u64>,
+    pub reputations: HashMap<String, i32>,
 }
 
 impl Default for TokenLedger {
@@ -42,11 +45,19 @@ impl Default for TokenLedger {
 
 impl TokenLedger {
     pub fn new() -> Self {
-        Self { balances: HashMap::new() }
+        Self { balances: HashMap::new(), stakes: HashMap::new(), reputations: HashMap::new() }
     }
 
     pub fn balance(&self, account: &str) -> u64 {
         self.balances.get(account).copied().unwrap_or(0)
+    }
+
+    pub fn stake_balance(&self, account: &str) -> u64 {
+        self.stakes.get(account).copied().unwrap_or(0)
+    }
+
+    pub fn reputation(&self, account: &str) -> i32 {
+        self.reputations.get(account).copied().unwrap_or(0)
     }
 
     pub fn transfer(&mut self, from: &str, to: &str, amount: u64) -> Result<(), LedgerError> {
@@ -58,6 +69,58 @@ impl TokenLedger {
         self.balances.insert(from.to_string(), from_balance - amount);
         self.balances.insert(to.to_string(), to_balance + amount);
         Ok(())
+    }
+
+    pub fn mint(&mut self, account: &str, amount: u64) {
+        let bal = self.balances.entry(account.to_string()).or_default();
+        *bal += amount;
+    }
+
+    pub fn burn(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        if self.balance(account) < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        let bal = self.balances.entry(account.to_string()).or_default();
+        *bal -= amount;
+        Ok(())
+    }
+
+    pub fn stake(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        if self.balance(account) < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        let bal = self.balances.entry(account.to_string()).or_default();
+        *bal -= amount;
+        let st = self.stakes.entry(account.to_string()).or_default();
+        *st += amount;
+        Ok(())
+    }
+
+    pub fn unstake(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        let st = self.stakes.entry(account.to_string()).or_default();
+        if *st < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        *st -= amount;
+        let bal = self.balances.entry(account.to_string()).or_default();
+        *bal += amount;
+        Ok(())
+    }
+
+    pub fn slash(&mut self, offender: &str, amount: u64) -> Result<(), LedgerError> {
+        let st = self.stakes.entry(offender.to_string()).or_default();
+        if *st < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        *st -= amount;
+        let tre = self.balances.entry(TREASURY.to_string()).or_default();
+        *tre += amount;
+        Ok(())
+    }
+
+    pub fn adjust_reputation(&mut self, account: &str, delta: i32) {
+        let rep = self.reputations.entry(account.to_string()).or_default();
+        *rep += delta;
     }
 }
 
@@ -114,7 +177,7 @@ pub fn save_jobs(jobs: &[Job]) -> Result<(), DevnetError> {
 }
 
 pub fn mint(ledger: &mut TokenLedger, account: &str, amount: u64) {
-    ledger.balances.insert(account.to_string(), amount);
+    ledger.mint(account, amount);
 }
 
 pub fn transfer(
@@ -123,57 +186,31 @@ pub fn transfer(
     to: &str,
     amount: u64,
 ) -> Result<(), LedgerError> {
-    if ledger.balances.get(from).copied().unwrap_or(0) < amount {
-        return Err(LedgerError::InsufficientBalance);
-    }
-    ledger.balances.insert(from.to_string(), ledger.balances[from] - amount);
-    ledger.balances.insert(to.to_string(), ledger.balances.get(to).copied().unwrap_or(0) + amount);
-    Ok(())
+    ledger.transfer(from, to, amount)
 }
 
 pub fn stake(ledger: &mut TokenLedger, account: &str, amount: u64) -> Result<(), LedgerError> {
-    if ledger.balances.get(account).copied().unwrap_or(0) < amount {
-        return Err(LedgerError::InsufficientBalance);
-    }
-    ledger.balances.insert(account.to_string(), ledger.balances[account] - amount);
-    Ok(())
+    ledger.stake(account, amount)
 }
 
 pub fn unstake(ledger: &mut TokenLedger, account: &str, amount: u64) -> Result<(), LedgerError> {
-    if ledger.balances.get(account).copied().unwrap_or(0) < amount {
-        return Err(LedgerError::InsufficientBalance);
-    }
-    ledger.balances.insert(account.to_string(), ledger.balances[account] + amount);
-    Ok(())
+    ledger.unstake(account, amount)
 }
 
 pub fn slash(ledger: &mut TokenLedger, offender: &str, amount: u64) -> Result<(), LedgerError> {
-    if ledger.balances.get(offender).copied().unwrap_or(0) < amount {
-        return Err(LedgerError::InsufficientBalance);
-    }
-    ledger.balances.insert(offender.to_string(), ledger.balances[offender] - amount);
-    ledger
-        .balances
-        .insert(TREASURY.to_string(), ledger.balances.get(TREASURY).copied().unwrap_or(0) + amount);
-    Ok(())
+    ledger.slash(offender, amount)
 }
 
 pub fn reputation(ledger: &TokenLedger, account: &str) -> i32 {
-    ledger.balances.get(account).copied().unwrap_or(0) as i32
+    ledger.reputation(account)
 }
 
 pub fn adjust_reputation(ledger: &mut TokenLedger, account: &str, delta: i32) {
-    let current = ledger.balances.get(account).copied().unwrap_or(0) as i64;
-    let new_balance = std::cmp::max(0, current + delta as i64) as u64;
-    ledger.balances.insert(account.to_string(), new_balance);
+    ledger.adjust_reputation(account, delta);
 }
 
 pub fn burn(ledger: &mut TokenLedger, account: &str, amount: u64) -> Result<(), LedgerError> {
-    if ledger.balances.get(account).copied().unwrap_or(0) < amount {
-        return Err(LedgerError::InsufficientBalance);
-    }
-    ledger.balances.insert(account.to_string(), ledger.balances[account] - amount);
-    Ok(())
+    ledger.burn(account, amount)
 }
 
 pub fn train_and_verify(_size: usize, _seed: u64, _difficulty: u32) -> bool {
@@ -194,8 +231,8 @@ pub fn post_job(
         return Err(JobManagerError::InsufficientBalance);
     }
     ledger.transfer(poster, "escrow", reward).map_err(|_| JobManagerError::InsufficientBalance)?;
-    let id = jobs.last().map(|j| j.id.clone()).unwrap_or_default();
-    jobs.push(Job { id, data: Vec::new(), reward });
+    let id = (jobs.len() + 1).to_string();
+    jobs.push(Job { id, data: Vec::new(), reward, worker: None });
     Ok(())
 }
 
@@ -204,8 +241,7 @@ pub fn assign_job(jobs: &mut [Job], job_id: &str, worker: &str) -> Result<(), Jo
         .iter_mut()
         .find(|j| j.id == job_id)
         .ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
-    job.data = Vec::new();
-    job.id = worker.to_string();
+    job.worker = Some(worker.to_string());
     Ok(())
 }
 
@@ -218,13 +254,13 @@ pub fn complete_job(
         .iter_mut()
         .find(|j| j.id == job_id)
         .ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
-    if !job.data.is_empty() {
+    if let Some(worker) = job.worker.clone() {
+        ledger
+            .transfer("escrow", &worker, job.reward)
+            .map_err(|_| JobManagerError::InsufficientBalance)?;
+        job.worker = None;
+    } else {
         return Err(JobManagerError::InvalidJobData);
     }
-    let worker = job.id.clone();
-    ledger
-        .transfer("escrow", &worker, job.reward)
-        .map_err(|_| JobManagerError::InsufficientBalance)?;
-    job.data = Vec::new();
     Ok(())
 }
