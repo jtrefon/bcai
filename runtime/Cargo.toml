@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "blockchain"
-path = "src/bin/blockchain.rs"
+name = "runtime"
+path = "src/bin/runtime.rs"
+
+[[bin]]
+name = "vm_test_runner"
+path = "src/bin/vm_test_runner.rs"
 
 [dependencies]
 thiserror = "1.0"
@@ -16,16 +20,16 @@ pollster = "0.3"
 bytemuck = { version = "1.14", features = ["derive"] }
 rand = "0.8"
 sha2 = "0.10"
-smartcore = "0.3.0"
+smartcore = { version = "0.3.0", features = ["datasets"] }
 rayon = "1.7"
 chrono = { version = "0.4.41", features = ["serde"] }
 clap = { version = "4.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 num-complex = "0.4"
-pyo3 = { version = "0.20", features = ["auto-initialize"] }
+pyo3 = { version = "0.22", features = ["auto-initialize"] }
 ndarray = "0.15"
-candle-core = "0.3"
-candle-nn = "0.3"
+candle-core = "0.9"
+candle-nn = "0.9"
 tch = { version = "0.15", optional = true }
 cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }
 metal = { version = "0.27", optional = true }

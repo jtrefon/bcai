@@ -197,7 +197,6 @@ impl PythonSandbox {
         output_tensors: &[(String, TensorId)],
         constraints: &PythonConstraints,
     ) -> Result<InstructionResult, PythonError> {
-        let _lock = self.interpreter_lock.lock(); // Ensure thread safety
         let start_time = Instant::now();
         
         {
@@ -222,7 +221,10 @@ impl PythonSandbox {
         let tensor_context = self.prepare_tensor_context(input_tensors)?;
 
         // Execute code in restricted environment
-        let result = self.execute_sandboxed_code_pyo3(code, tensor_context, constraints)?;
+        let result = {
+            let _lock = self.interpreter_lock.lock(); // Ensure thread safety
+            self.execute_sandboxed_code_pyo3(code, tensor_context, constraints)
+        }?;
 
         // Extract output tensors from Python environment
         let output_data = self.extract_output_tensors_pyo3(&result, output_tensors)?;

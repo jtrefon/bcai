@@ -110,7 +110,7 @@ impl DataType {
 }
 
 /// Tensor identifier for referencing tensors in VM
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct TensorId(pub u64);
 
 /// Enhanced ML instructions for the VM
