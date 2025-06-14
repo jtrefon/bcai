@@ -9,7 +9,7 @@
 use crate::{
     evaluator::Evaluator,
     job_manager::{JobManager, JobManagerError},
-    pouw::{generate_task, verify_production, Solution},
+    pouw::{generate_task, Solution},
     token::{LedgerError, TokenLedger},
     trainer::Trainer,
 };
@@ -226,8 +226,8 @@ impl UnifiedNode {
         // Execute training computation (simplified for this integration)
         let solution = self.trainer.train(&task, difficulty);
         
-        // Verify our own solution
-        if !verify_production(&task, &solution, difficulty) {
+        // Verify our own solution (use same verification as evaluator for consistency)
+        if !self.evaluator.evaluate(&task, &solution, difficulty) {
             return Err(NodeError::TrainingVerificationFailed);
         }
 

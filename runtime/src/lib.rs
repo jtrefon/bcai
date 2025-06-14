@@ -1,11 +1,13 @@
 use thiserror::Error;
 
 pub mod evaluator;
+pub mod federated;
 pub mod gpu;
 pub mod job_manager;
 pub mod mnist;
 pub mod network;
 pub mod node;
+pub mod p2p_service;
 pub mod pouw;
 pub mod token;
 pub mod trainer;
