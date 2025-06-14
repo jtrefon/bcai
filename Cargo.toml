@@ -48,4 +48,5 @@ path = "bcai-cli.rs"
 
 [[bin]]
 name = "blockchain"
-path = "runtime/src/bin/blockchain.rs" 
+path = "runtime/src/bin/blockchain.rs"
+doc = false 
