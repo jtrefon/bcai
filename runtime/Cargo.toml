@@ -12,3 +12,6 @@ bytemuck = { version = "1.14", features = ["derive"] }
 rand = "0.8"
 sha2 = "0.10"
 smartcore = { version = "0.4", default-features = false, features = ["datasets"] }
+
+[dev-dependencies]
+keygen_lib = { package = "keygen", path = "../keygen" }
