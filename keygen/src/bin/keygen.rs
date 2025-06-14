@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
-use keygen_lib::{generate_keypair, KeyPair};
+use keygen_lib::{generate_keypair, Keypair};
+use sha2::Digest;
+use ed25519_dalek::Verifier;
 use serde_json;
 use std::fs;
 use std::path::Path;
@@ -122,8 +124,8 @@ async fn generate_keys(
     let private_key_data = serde_json::json!({
         "name": key_name,
         "type": "Ed25519",
-        "private_key": hex::encode(keypair.private_key.to_bytes()),
-        "public_key": hex::encode(keypair.public_key.to_bytes()),
+        "private_key": hex::encode(keypair.secret.to_bytes()),
+        "public_key": hex::encode(keypair.public.to_bytes()),
         "created_at": chrono::Utc::now().to_rfc3339(),
         "version": "1.0"
     });
@@ -134,7 +136,7 @@ async fn generate_keys(
     let public_key_data = serde_json::json!({
         "name": key_name,
         "type": "Ed25519",
-        "public_key": hex::encode(keypair.public_key.to_bytes()),
+        "public_key": hex::encode(keypair.public.to_bytes()),
         "created_at": chrono::Utc::now().to_rfc3339(),
         "version": "1.0"
     });
@@ -145,7 +147,7 @@ async fn generate_keys(
     println!("📄 Private key: {}", private_key_file);
     println!("📄 Public key: {}", public_key_file);
     println!("🏷️  Key name: {}", key_name);
-    println!("🔑 Public key (hex): {}", hex::encode(keypair.public_key.to_bytes()));
+    println!("🔑 Public key (hex): {}", hex::encode(keypair.public.to_bytes()));
     
     println!();
     println!("⚠️  SECURITY WARNING:");
@@ -216,7 +218,7 @@ async fn sign_data(
         .ok_or("Invalid private key file format")?;
     
     let private_key_bytes = hex::decode(private_key_hex)?;
-    let keypair = KeyPair::from_private_key_bytes(&private_key_bytes)?;
+    let keypair = Keypair::from_private_key_bytes(&private_key_bytes)?;
 
     // Sign the data
     let signature = keypair.sign(&data_to_sign);
@@ -225,7 +227,7 @@ async fn sign_data(
     // Save signature
     let signature_data = serde_json::json!({
         "signature": signature_hex,
-        "public_key": hex::encode(keypair.public_key.to_bytes()),
+        "public_key": hex::encode(keypair.public.to_bytes()),
         "data_hash": hex::encode(sha2::Sha256::digest(&data_to_sign)),
         "signed_at": chrono::Utc::now().to_rfc3339(),
         "algorithm": "Ed25519"

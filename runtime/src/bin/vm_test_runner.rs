@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
+use runtime::{Vm, VmConfig, Instruction};
+
+#[cfg(feature = "enhanced-vm")]
 use runtime::{
-    enhanced_vm::{EnhancedVM, VMConfig},
+    enhanced_vm::{EnhancedVM, VMConfig as EnhancedVMConfig},
     ml_instructions::MLInstruction,
     hardware_abstraction::HardwareBackend,
     python_bridge::PythonBridge,
@@ -50,33 +53,57 @@ enum Commands {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Commands::All { benchmark } => {
-            run_all_tests(benchmark).await?;
+    #[cfg(feature = "enhanced-vm")]
+    {
+        match cli.command {
+            Commands::All { benchmark } => {
+                run_all_tests(benchmark).await?;
+            }
+            Commands::Instructions => {
+                run_instruction_tests().await?;
+            }
+            Commands::Tensors => {
+                run_tensor_tests().await?;
+            }
+            Commands::Python => {
+                run_python_tests().await?;
+            }
+            Commands::Hardware => {
+                run_hardware_tests().await?;
+            }
+            Commands::Benchmark { iterations, detailed } => {
+                run_benchmarks(iterations, detailed).await?;
+            }
+            Commands::Stress { duration_seconds } => {
+                run_stress_tests(duration_seconds).await?;
+            }
         }
-        Commands::Instructions => {
-            run_instruction_tests().await?;
-        }
-        Commands::Tensors => {
-            run_tensor_tests().await?;
-        }
-        Commands::Python => {
-            run_python_tests().await?;
-        }
-        Commands::Hardware => {
-            run_hardware_tests().await?;
-        }
-        Commands::Benchmark { iterations, detailed } => {
-            run_benchmarks(iterations, detailed).await?;
-        }
-        Commands::Stress { duration_seconds } => {
-            run_stress_tests(duration_seconds).await?;
+    }
+
+    #[cfg(not(feature = "enhanced-vm"))]
+    {
+        println!("⚠️  Enhanced VM features not compiled in this build.");
+        println!("    To enable full testing capabilities, compile with: cargo build --features enhanced-vm");
+        println!();
+        
+        match cli.command {
+            Commands::All { .. } => {
+                run_basic_tests().await?;
+            }
+            Commands::Instructions => {
+                run_basic_instruction_tests().await?;
+            }
+            _ => {
+                println!("❌ This test requires enhanced VM features.");
+                println!("    Rebuild with --features enhanced-vm to enable all tests.");
+            }
         }
     }
 
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_all_tests(benchmark: bool) -> Result<(), Box<dyn std::error::Error>> {
     println!("🧪 BCAI Enhanced VM - Comprehensive Test Suite");
     println!("===============================================");
@@ -124,6 +151,7 @@ async fn run_all_tests(benchmark: bool) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_instruction_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 Testing VM Instructions...");
     
@@ -182,6 +210,7 @@ async fn run_instruction_tests() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_tensor_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔢 Testing Tensor Operations...");
 
@@ -217,6 +246,7 @@ async fn run_tensor_tests() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_python_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("🐍 Testing Python Bridge...");
 
@@ -256,6 +286,7 @@ result
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_hardware_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("🖥️  Testing Hardware Abstraction...");
 
@@ -330,6 +361,7 @@ async fn run_hardware_tests() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_benchmarks(iterations: u32, detailed: bool) -> Result<(), Box<dyn std::error::Error>> {
     println!("🏃 Running Performance Benchmarks...");
     println!("Iterations: {}", iterations);
@@ -411,6 +443,7 @@ async fn run_benchmarks(iterations: u32, detailed: bool) -> Result<(), Box<dyn s
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_stress_tests(duration_seconds: u64) -> Result<(), Box<dyn std::error::Error>> {
     println!("💪 Running Stress Tests...");
     println!("Duration: {} seconds", duration_seconds);
@@ -502,5 +535,90 @@ async fn run_stress_tests(duration_seconds: u64) -> Result<(), Box<dyn std::erro
     println!("  💾 Tensors created: {}", tensor_id);
     println!("  🧠 Memory pressure handled successfully");
 
+    Ok(())
+}
+
+// Basic VM test implementations that don't require enhanced features
+#[cfg(not(feature = "enhanced-vm"))]
+async fn run_basic_tests() -> Result<(), Box<dyn std::error::Error>> {
+    println!("🧪 BCAI Basic VM - Test Suite");
+    println!("=============================");
+    println!();
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    let test_results = vec![
+        ("Basic VM Instructions", run_basic_instruction_tests().await),
+    ];
+
+    for (name, result) in test_results {
+        match result {
+            Ok(_) => {
+                println!("✅ {}: PASSED", name);
+                passed += 1;
+            }
+            Err(e) => {
+                println!("❌ {}: FAILED - {}", name, e);
+                failed += 1;
+            }
+        }
+    }
+
+    println!();
+    println!("📊 Test Summary:");
+    println!("  ✅ Passed: {}", passed);
+    println!("  ❌ Failed: {}", failed);
+    if passed + failed > 0 {
+        println!("  📈 Success Rate: {:.1}%", (passed as f64 / (passed + failed) as f64) * 100.0);
+    }
+
+    println!();
+    println!("💡 To enable enhanced ML tests:");
+    println!("  cargo build --features enhanced-vm");
+
+    Ok(())
+}
+
+#[cfg(not(feature = "enhanced-vm"))]
+async fn run_basic_instruction_tests() -> Result<(), Box<dyn std::error::Error>> {
+    println!("🔧 Testing Basic VM Instructions...");
+    
+    let mut vm = Vm::new();
+
+    // Test stack operations
+    vm.execute_instruction(Instruction::Push(5.0))?;
+    vm.execute_instruction(Instruction::Push(3.0))?;
+    vm.execute_instruction(Instruction::Add)?;
+    
+    if vm.stack().last() != Some(&8.0) {
+        return Err("Stack addition test failed".into());
+    }
+
+    vm.execute_instruction(Instruction::Push(2.0))?;
+    vm.execute_instruction(Instruction::Mul)?;
+    
+    if vm.stack().last() != Some(&16.0) {
+        return Err("Stack multiplication test failed".into());
+    }
+
+    // Test division
+    vm.execute_instruction(Instruction::Push(4.0))?;
+    vm.execute_instruction(Instruction::Div)?;
+    
+    if vm.stack().last() != Some(&4.0) {
+        return Err("Stack division test failed".into());
+    }
+
+    // Test memory operations
+    vm.execute_instruction(Instruction::Store(0))?;
+    vm.execute_instruction(Instruction::Load(0))?;
+    
+    if vm.stack().last() != Some(&4.0) {
+        return Err("Memory store/load test failed".into());
+    }
+
+    println!("  ✓ Stack operations (push, add, multiply, divide)");
+    println!("  ✓ Memory operations (store, load)");
     Ok(())
 } 

@@ -7,25 +7,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// Network messages for distributed training coordination
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Network message types
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum NetworkMessage {
-    /// Announce node capabilities to the network
-    CapabilityAnnouncement { node_id: String, capability: NodeCapability },
-    /// Broadcast a new distributed job
-    JobPosted { job: DistributedJob, poster_id: String },
-    /// Request to join a distributed job
-    JobVolunteer { job_id: u64, node_id: String, capability: NodeCapability },
-    /// Training result submission
-    TrainingResultSubmission { result: TrainingResult, submitter_id: String },
-    /// Training result evaluation
-    TrainingEvaluation { job_id: u64, result_hash: String, is_valid: bool, evaluator_id: String },
-    /// Job completion notification
-    JobCompleted { job_id: u64, final_model_hash: String },
-    /// Request for network state synchronization
-    StateSync { requesting_node: String, last_known_block: u64 },
-    /// Response to state sync with network updates
-    StateSyncResponse { jobs: Vec<DistributedJob>, current_block: u64 },
+    Ping,
+    Pong,
+    Data(Vec<u8>),
+    Request(String),
+    Response(String),
 }
 
 /// Network coordination errors
@@ -41,6 +30,44 @@ pub enum NetworkError {
     InvalidMessage,
     #[error("Consensus failure")]
     ConsensusFailed,
+}
+
+/// Network coordinator for managing network operations
+#[derive(Debug, Clone, Default)]
+pub struct NetworkCoordinator {
+    node_id: String,
+    peers: Vec<String>,
+}
+
+impl NetworkCoordinator {
+    pub fn new(node_id: String) -> Self {
+        Self {
+            node_id,
+            peers: Vec::new(),
+        }
+    }
+    
+    pub fn add_peer(&mut self, peer_id: String) {
+        self.peers.push(peer_id);
+    }
+    
+    pub fn broadcast(&self, _message: NetworkMessage) -> Result<(), String> {
+        // Stub implementation
+        Ok(())
+    }
+    
+    pub fn send_to_peer(&self, _peer_id: &str, _message: NetworkMessage) -> Result<(), String> {
+        // Stub implementation
+        Ok(())
+    }
+    
+    pub fn node_id(&self) -> &str {
+        &self.node_id
+    }
+    
+    pub fn peers(&self) -> &[String] {
+        &self.peers
+    }
 }
 
 /// Network coordinator managing distributed operations

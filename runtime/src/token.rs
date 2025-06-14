@@ -2,12 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+/// Token ledger error types
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum LedgerError {
     #[error("insufficient balance")]
     InsufficientBalance,
-    #[error("insufficient stake")]
-    InsufficientStake,
+    #[error("invalid account: {0}")]
+    InvalidAccount(String),
+    #[error("transaction failed: {0}")]
+    TransactionFailed(String),
 }
 
 /// Simple in-memory ledger for balances and staking.
@@ -35,20 +38,25 @@ impl TokenLedger {
     }
 
     /// Mint new tokens into `account`.
-    pub fn mint(&mut self, account: &str, amount: u64) {
-        let entry = self.balances.entry(account.to_string()).or_default();
-        *entry += amount;
+    pub fn mint(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        let balance = self.balances.entry(account.to_string()).or_insert(0);
+        *balance = balance.checked_add(amount)
+            .ok_or_else(|| LedgerError::TransactionFailed("overflow".to_string()))?;
+        Ok(())
     }
 
     /// Transfer tokens between accounts.
     pub fn transfer(&mut self, from: &str, to: &str, amount: u64) -> Result<(), LedgerError> {
-        let from_bal = self.balances.entry(from.to_string()).or_default();
-        if *from_bal < amount {
+        let from_balance = self.balances.get(from).copied().unwrap_or(0);
+        if from_balance < amount {
             return Err(LedgerError::InsufficientBalance);
         }
-        *from_bal -= amount;
-        let to_bal = self.balances.entry(to.to_string()).or_default();
-        *to_bal += amount;
+        
+        self.balances.insert(from.to_string(), from_balance - amount);
+        let to_balance = self.balances.entry(to.to_string()).or_insert(0);
+        *to_balance = to_balance.checked_add(amount)
+            .ok_or_else(|| LedgerError::TransactionFailed("overflow".to_string()))?;
+        
         Ok(())
     }
 

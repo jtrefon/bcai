@@ -135,23 +135,19 @@ pub struct TriggeredAlert {
 }
 
 /// Monitoring configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MonitoringConfig {
-    pub metrics_retention_hours: u32,
-    pub health_check_interval_secs: u64,
-    pub performance_sample_interval_secs: u64,
-    pub alert_check_interval_secs: u64,
-    pub max_alerts_per_hour: u32,
+    pub enabled: bool,
+    pub alert_threshold: u64,
+    pub health_check_interval: u64,
 }
 
 impl Default for MonitoringConfig {
     fn default() -> Self {
         Self {
-            metrics_retention_hours: 24,
-            health_check_interval_secs: 30,
-            performance_sample_interval_secs: 10,
-            alert_check_interval_secs: 5,
-            max_alerts_per_hour: 100,
+            enabled: true,
+            alert_threshold: 100,
+            health_check_interval: 30,
         }
     }
 }
@@ -163,9 +159,10 @@ pub struct MonitoringSystem {
     bcai_metrics: VecDeque<BcaiMetrics>,
     performance_metrics: VecDeque<PerformanceMetrics>,
     health_checks: HashMap<String, HealthCheck>,
-    alerts: HashMap<String, Alert>,
+    alerts: Vec<Alert>,
     triggered_alerts: Vec<TriggeredAlert>,
     last_alert_times: HashMap<String, u64>,
+    status: HealthStatus,
 }
 
 impl MonitoringSystem {
@@ -177,9 +174,10 @@ impl MonitoringSystem {
             bcai_metrics: VecDeque::new(),
             performance_metrics: VecDeque::new(),
             health_checks: HashMap::new(),
-            alerts: HashMap::new(),
+            alerts: Vec::new(),
             triggered_alerts: Vec::new(),
             last_alert_times: HashMap::new(),
+            status: HealthStatus::Healthy,
         };
 
         // Setup default alerts
@@ -326,7 +324,7 @@ impl MonitoringSystem {
 
     /// Add custom alert
     pub fn add_alert(&mut self, alert: Alert) {
-        self.alerts.insert(alert.id.clone(), alert);
+        self.alerts.push(alert);
     }
 
     /// Check all alerts
@@ -334,7 +332,7 @@ impl MonitoringSystem {
         let mut new_alerts = Vec::new();
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-        for alert in self.alerts.values() {
+        for alert in self.alerts.iter() {
             if !alert.enabled {
                 continue;
             }
@@ -484,7 +482,7 @@ impl MonitoringSystem {
         ];
 
         for alert in alerts {
-            self.alerts.insert(alert.id.clone(), alert);
+            self.alerts.push(alert);
         }
     }
 
@@ -711,7 +709,7 @@ impl MonitoringSystem {
 
     fn cleanup_old_metrics(&mut self) {
         let cutoff_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
-            - (self.config.metrics_retention_hours as u64 * 3600);
+            - (self.config.health_check_interval as u64 * 3600);
 
         // Clean system metrics
         while let Some(front) = self.system_metrics.front() {
@@ -739,6 +737,32 @@ impl MonitoringSystem {
                 break;
             }
         }
+    }
+
+    pub fn send_alert(&mut self, severity: AlertSeverity, message: String) {
+        let alert = Alert {
+            id: "custom_alert".to_string(),
+            metric: "".to_string(),
+            threshold: 0.0,
+            comparison: AlertComparison::Equal,
+            severity,
+            message,
+            enabled: true,
+            cooldown_seconds: 0,
+        };
+        self.alerts.push(alert);
+    }
+    
+    pub fn set_status(&mut self, status: HealthStatus) {
+        self.status = status;
+    }
+    
+    pub fn status(&self) -> &HealthStatus {
+        &self.status
+    }
+    
+    pub fn alerts(&self) -> &[Alert] {
+        &self.alerts
     }
 }
 

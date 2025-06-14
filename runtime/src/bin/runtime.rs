@@ -1,11 +1,13 @@
 use clap::{Parser, Subcommand};
+use runtime::{Vm, VmConfig, Instruction};
+
+#[cfg(feature = "enhanced-vm")]
 use runtime::{
-    enhanced_vm::{EnhancedVM, VMConfig},
+    enhanced_vm::{EnhancedVM, VMConfig as EnhancedVMConfig},
     ml_instructions::MLInstruction,
     hardware_abstraction::HardwareBackend,
     python_bridge::PythonBridge,
 };
-use std::collections::HashMap;
 
 #[derive(Parser)]
 #[command(name = "runtime")]
@@ -49,24 +51,48 @@ enum Commands {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Commands::Interactive { python_bridge, gpu_enabled, backend } => {
-            run_interactive(python_bridge, gpu_enabled, &backend).await?;
+    #[cfg(feature = "enhanced-vm")]
+    {
+        match cli.command {
+            Commands::Interactive { python_bridge, gpu_enabled, backend } => {
+                run_interactive(python_bridge, gpu_enabled, &backend).await?;
+            }
+            Commands::Execute { file, python_bridge, gpu_enabled } => {
+                execute_file(&file, python_bridge, gpu_enabled).await?;
+            }
+            Commands::Info => {
+                show_info().await?;
+            }
+            Commands::Benchmark { iterations } => {
+                run_benchmark(iterations).await?;
+            }
         }
-        Commands::Execute { file, python_bridge, gpu_enabled } => {
-            execute_file(&file, python_bridge, gpu_enabled).await?;
-        }
-        Commands::Info => {
-            show_info().await?;
-        }
-        Commands::Benchmark { iterations } => {
-            run_benchmark(iterations).await?;
+    }
+
+    #[cfg(not(feature = "enhanced-vm"))]
+    {
+        println!("⚠️  Enhanced VM features not compiled in this build.");
+        println!("    To enable enhanced features, compile with: cargo build --features enhanced-vm");
+        
+        match cli.command {
+            Commands::Interactive { .. } => {
+                println!("🔧 Starting basic VM interactive mode...");
+                run_basic_interactive().await?;
+            }
+            Commands::Info => {
+                show_basic_info().await?;
+            }
+            _ => {
+                println!("❌ This command requires enhanced VM features.");
+                println!("    Rebuild with --features enhanced-vm to enable all features.");
+            }
         }
     }
 
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_interactive(python_bridge: bool, gpu_enabled: bool, backend: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 BCAI Enhanced VM Runtime - Interactive Mode");
     println!("==============================================");
@@ -124,6 +150,7 @@ async fn run_interactive(python_bridge: bool, gpu_enabled: bool, backend: &str) 
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn execute_command(vm: &mut EnhancedVM, command: &str) -> Result<String, Box<dyn std::error::Error>> {
     let parts: Vec<&str> = command.split_whitespace().collect();
     
@@ -175,6 +202,7 @@ async fn execute_command(vm: &mut EnhancedVM, command: &str) -> Result<String, B
     }
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn execute_file(file: &str, python_bridge: bool, gpu_enabled: bool) -> Result<(), Box<dyn std::error::Error>> {
     println!("📁 Executing ML job from file: {}", file);
     
@@ -220,6 +248,7 @@ async fn execute_file(file: &str, python_bridge: bool, gpu_enabled: bool) -> Res
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn show_info() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔍 BCAI Enhanced VM Information");
     println!("===============================");
@@ -274,6 +303,7 @@ async fn show_info() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "enhanced-vm")]
 async fn run_benchmark(iterations: u32) -> Result<(), Box<dyn std::error::Error>> {
     println!("🏃 Running VM Performance Benchmark");
     println!("==================================");
@@ -331,4 +361,98 @@ async fn run_benchmark(iterations: u32) -> Result<(), Box<dyn std::error::Error>
     println!("✅ Benchmark completed successfully!");
     
     Ok(())
-} 
+}
+
+// Basic VM implementations that don't require enhanced features
+#[cfg(not(feature = "enhanced-vm"))]
+async fn run_basic_interactive() -> Result<(), Box<dyn std::error::Error>> {
+    println!("🔧 BCAI Basic VM Runtime - Interactive Mode");
+    println!("==========================================");
+    println!("💡 Available commands:");
+    println!("  push <value>     - Push value to stack");
+    println!("  add              - Add top two stack values");
+    println!("  sub              - Subtract top two stack values");
+    println!("  mul              - Multiply top two stack values");
+    println!("  div              - Divide top two stack values");
+    println!("  stack            - Show current stack");
+    println!("  quit             - Exit");
+    println!();
+
+    let mut vm = Vm::new();
+
+    loop {
+        print!("vm> ");
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+        
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input == "quit" {
+            break;
+        }
+
+        match execute_basic_command(&mut vm, input) {
+            Ok(result) => println!("✅ {}", result),
+            Err(e) => println!("❌ Error: {}", e),
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(not(feature = "enhanced-vm"))]
+fn execute_basic_command(vm: &mut Vm, command: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    
+    match parts.get(0) {
+        Some(&"push") => {
+            if parts.len() != 2 {
+                return Err("Usage: push <value>".into());
+            }
+            let value: f64 = parts[1].parse()?;
+            vm.execute_instruction(Instruction::Push(value))?;
+            Ok(format!("Pushed {} to stack", value))
+        }
+        Some(&"add") => {
+            vm.execute_instruction(Instruction::Add)?;
+            Ok("Added top two values".to_string())
+        }
+        Some(&"sub") => {
+            vm.execute_instruction(Instruction::Sub)?;
+            Ok("Subtracted top two values".to_string())
+        }
+        Some(&"mul") => {
+            vm.execute_instruction(Instruction::Mul)?;
+            Ok("Multiplied top two values".to_string())
+        }
+        Some(&"div") => {
+            vm.execute_instruction(Instruction::Div)?;
+            Ok("Divided top two values".to_string())
+        }
+        Some(&"stack") => {
+            Ok(format!("Stack: {:?}", vm.stack()))
+        }
+        _ => Err(format!("Unknown command: {}", parts.get(0).unwrap_or(&"")).into()),
+    }
+}
+
+#[cfg(not(feature = "enhanced-vm"))]
+async fn show_basic_info() -> Result<(), Box<dyn std::error::Error>> {
+    println!("🔍 BCAI Basic VM Information");
+    println!("============================");
+    println!();
+    
+    println!("📊 VM Capabilities:");
+    println!("  • Stack-based VM: ✅");
+    println!("  • Basic Arithmetic: ✅");
+    println!("  • Memory Operations: ✅");
+    println!("  • Enhanced ML: ❌ (Not compiled)");
+    println!();
+    
+    println!("💡 To enable enhanced features:");
+    println!("  cargo build --features enhanced-vm");
+    
+    Ok(())
+}

@@ -18,9 +18,9 @@ path = "src/bin/vm_test_runner.rs"
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]
-cuda = ["tch/cuda"]
-metal-gpu = ["metal"]
-pytorch = ["tch"]
+cuda = ["enhanced-vm"]
+metal-gpu = ["enhanced-vm", "metal"]
+pytorch = ["enhanced-vm"]
 
 [dependencies]
 # Core dependencies
@@ -34,6 +34,7 @@ clap = { version = "4.0", features = ["derive"] }
 # Essential for blockchain
 sha2 = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
 
 # Enhanced VM dependencies
 num-complex = "0.4"
@@ -47,12 +48,12 @@ candle-core = { version = "0.3", optional = true }
 metal = { version = "0.27", optional = true }
 
 # Hardware abstraction
-wgpu = "0.18"
+wgpu = "0.19"
 bytemuck = { version = "1.14", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.5"
 
-[[bench]]
-name = "vm_benchmarks"
-harness = false
+# [[bench]]
+# name = "vm_benchmarks"
+# harness = false

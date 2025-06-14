@@ -17,14 +17,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// Node capabilities advertised to the network
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct NodeCapability {
-    pub cpus: u8,
-    pub gpus: u8,
-    pub gpu_memory_gb: u16,
-    pub available_stake: u64,
-    pub reputation: i32,
+/// Node capability types
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum NodeCapability {
+    BasicCompute,
+    GpuAccelerated,
+    HighMemory,
+    Storage,
+    Network,
 }
 
 /// Training job with distributed coordination
@@ -86,16 +86,27 @@ pub enum NodeError {
     InvalidStateTransition,
 }
 
-/// Unified BCAI node integrating all system components
+/// Unified node implementation
+#[derive(Debug, Clone)]
 pub struct UnifiedNode {
     pub node_id: String,
     pub capability: NodeCapability,
+    pub status: NodeStatus,
     job_manager: JobManager,
     trainer: Trainer,
     evaluator: Evaluator,
     distributed_jobs: HashMap<u64, DistributedJob>,
     pending_results: HashMap<u64, TrainingResult>,
     current_block: u64,
+}
+
+/// Node status
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum NodeStatus {
+    Active,
+    Idle,
+    Busy,
+    Offline,
 }
 
 impl UnifiedNode {
@@ -111,6 +122,7 @@ impl UnifiedNode {
         Self {
             node_id,
             capability,
+            status: NodeStatus::Idle,
             job_manager,
             trainer,
             evaluator,
@@ -355,6 +367,14 @@ impl UnifiedNode {
                 })
                 .count(),
         }
+    }
+
+    pub fn set_status(&mut self, status: NodeStatus) {
+        self.status = status;
+    }
+    
+    pub fn is_available(&self) -> bool {
+        matches!(self.status, NodeStatus::Idle | NodeStatus::Active)
     }
 }
 
