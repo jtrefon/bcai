@@ -70,20 +70,20 @@ jobs:
       - name: Package binaries (Unix)
         if: matrix.os != 'windows-latest'
         run: |
-          cp target/${{ matrix.target }}/release/devnet package/devnet${{ matrix.binary_ext }}
-          cp target/${{ matrix.target }}/release/jobmanager package/jobmanager${{ matrix.binary_ext }}
-          cp target/${{ matrix.target }}/release/keygen package/keygen${{ matrix.binary_ext }}
-          cp target/${{ matrix.target }}/release/dashboard package/dashboard${{ matrix.binary_ext }}
+          cp devnet/target/${{ matrix.target }}/release/devnet package/devnet${{ matrix.binary_ext }}
+          cp jobmanager/target/${{ matrix.target }}/release/jobmanager package/jobmanager${{ matrix.binary_ext }}
+          cp keygen/target/${{ matrix.target }}/release/keygen package/keygen${{ matrix.binary_ext }}
+          cp dashboard/target/${{ matrix.target }}/release/dashboard package/dashboard${{ matrix.binary_ext }}
           chmod +x package/*
           cd package && tar -czf ../${{ matrix.artifact }}.tar.gz *
       
       - name: Package binaries (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          copy target\${{ matrix.target }}\release\devnet.exe package\devnet.exe
-          copy target\${{ matrix.target }}\release\jobmanager.exe package\jobmanager.exe
-          copy target\${{ matrix.target }}\release\keygen.exe package\keygen.exe
-          copy target\${{ matrix.target }}\release\dashboard.exe package\dashboard.exe
+          copy devnet\target\${{ matrix.target }}\release\devnet.exe package\devnet.exe
+          copy jobmanager\target\${{ matrix.target }}\release\jobmanager.exe package\jobmanager.exe
+          copy keygen\target\${{ matrix.target }}\release\keygen.exe package\keygen.exe
+          copy dashboard\target\${{ matrix.target }}\release\dashboard.exe package\dashboard.exe
           cd package && tar -czf ..\${{ matrix.artifact }}.tar.gz *
       
       - name: Upload artifacts

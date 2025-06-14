@@ -50,21 +50,35 @@ jobs:
           cargo build --release --target ${{ steps.config.outputs.target }} --manifest-path keygen/Cargo.toml
           cargo build --release --target ${{ steps.config.outputs.target }} --manifest-path dashboard/Cargo.toml
       
+      - name: List built binaries (debug)
+        run: |
+          echo "Listing target directory structure:"
+          find . -name "devnet*" -type f -executable 2>/dev/null || true
+          find . -name "jobmanager*" -type f -executable 2>/dev/null || true
+          find . -name "keygen*" -type f -executable 2>/dev/null || true
+          find . -name "dashboard*" -type f -executable 2>/dev/null || true
+          echo "Target directory contents:"
+          ls -la target/ || echo "No target directory"
+          ls -la target/${{ steps.config.outputs.target }}/ || echo "No target platform directory"
+          ls -la target/${{ steps.config.outputs.target }}/release/ || echo "No release directory"
+        shell: bash
+      
       - name: Test binaries
         run: |
-          ./target/${{ steps.config.outputs.target }}/release/devnet${{ steps.config.outputs.binary_ext }} --help
-          ./target/${{ steps.config.outputs.target }}/release/jobmanager${{ steps.config.outputs.binary_ext }} --help
-          ./target/${{ steps.config.outputs.target }}/release/keygen${{ steps.config.outputs.binary_ext }} --help
-          ./target/${{ steps.config.outputs.target }}/release/dashboard${{ steps.config.outputs.binary_ext }} --help
+          # Test binaries from their actual locations
+          devnet/target/${{ steps.config.outputs.target }}/release/devnet${{ steps.config.outputs.binary_ext }} --help
+          jobmanager/target/${{ steps.config.outputs.target }}/release/jobmanager${{ steps.config.outputs.binary_ext }} --help
+          keygen/target/${{ steps.config.outputs.target }}/release/keygen${{ steps.config.outputs.binary_ext }} --help
+          dashboard/target/${{ steps.config.outputs.target }}/release/dashboard${{ steps.config.outputs.binary_ext }} --help
         shell: bash
       
       - name: Package test
         run: |
           mkdir -p package
-          cp target/${{ steps.config.outputs.target }}/release/devnet${{ steps.config.outputs.binary_ext }} package/
-          cp target/${{ steps.config.outputs.target }}/release/jobmanager${{ steps.config.outputs.binary_ext }} package/
-          cp target/${{ steps.config.outputs.target }}/release/keygen${{ steps.config.outputs.binary_ext }} package/
-          cp target/${{ steps.config.outputs.target }}/release/dashboard${{ steps.config.outputs.binary_ext }} package/
+          cp devnet/target/${{ steps.config.outputs.target }}/release/devnet${{ steps.config.outputs.binary_ext }} package/
+          cp jobmanager/target/${{ steps.config.outputs.target }}/release/jobmanager${{ steps.config.outputs.binary_ext }} package/
+          cp keygen/target/${{ steps.config.outputs.target }}/release/keygen${{ steps.config.outputs.binary_ext }} package/
+          cp dashboard/target/${{ steps.config.outputs.target }}/release/dashboard${{ steps.config.outputs.binary_ext }} package/
           cd package && tar -czf ../test-build.tar.gz *
           echo "Package created successfully: $(ls -la ../test-build.tar.gz)"
         shell: bash
