@@ -44,4 +44,8 @@ serde_json = { workspace = true }
 
 [[bin]]
 name = "bcai"
-path = "bcai-cli.rs" 
+path = "bcai-cli.rs"
+
+[[bin]]
+name = "blockchain"
+path = "runtime/src/bin/blockchain.rs" 
