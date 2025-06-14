@@ -78,6 +78,7 @@ This detailed architecture will continue to evolve with implementation and testi
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on expected behavior and the moderation process.
 
 For a breakdown of near-term development tasks, see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+We are also hosting a [community challenge](COMMUNITY_CHALLENGE.md) to test the network and reward participants with testnet tokens.
 
 ### Prototype CLI
 This repository now includes a small Rust program under `jobmanager/` that
