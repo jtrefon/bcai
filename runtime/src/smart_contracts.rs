@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ContractError {
@@ -213,7 +213,9 @@ impl SmartContractEngine {
         contract_address: &str,
         node_ids: Vec<String>,
     ) -> ContractResult<()> {
-        let contract = self.contracts.get_mut(contract_address)
+        let contract = self
+            .contracts
+            .get_mut(contract_address)
             .ok_or_else(|| ContractError::ContractNotFound(contract_address.to_string()))?;
 
         if let Some(ai_job) = &mut contract.ai_job {
@@ -237,7 +239,9 @@ impl SmartContractEngine {
         node_id: &str,
         result: AIJobResult,
     ) -> ContractResult<bool> {
-        let contract = self.contracts.get_mut(contract_address)
+        let contract = self
+            .contracts
+            .get_mut(contract_address)
             .ok_or_else(|| ContractError::ContractNotFound(contract_address.to_string()))?;
 
         if let Some(ai_job) = &mut contract.ai_job {
@@ -248,15 +252,17 @@ impl SmartContractEngine {
             if matches!(ai_job.status, ContractStatus::Active) {
                 // Validate results against requirements
                 if result.accuracy < ai_job.requirements.min_accuracy {
-                    return Err(ContractError::JobRequirementsNotMet(
-                        format!("Accuracy {} below minimum {}", result.accuracy, ai_job.requirements.min_accuracy)
-                    ));
+                    return Err(ContractError::JobRequirementsNotMet(format!(
+                        "Accuracy {} below minimum {}",
+                        result.accuracy, ai_job.requirements.min_accuracy
+                    )));
                 }
 
                 if result.training_time > ai_job.requirements.max_training_time {
-                    return Err(ContractError::JobRequirementsNotMet(
-                        format!("Training time {} exceeds maximum {}", result.training_time, ai_job.requirements.max_training_time)
-                    ));
+                    return Err(ContractError::JobRequirementsNotMet(format!(
+                        "Training time {} exceeds maximum {}",
+                        result.training_time, ai_job.requirements.max_training_time
+                    )));
                 }
 
                 ai_job.result = Some(result);
@@ -267,10 +273,10 @@ impl SmartContractEngine {
                 // Release escrow and distribute rewards
                 let reward_per_node = ai_job.reward_pool / ai_job.assigned_nodes.len() as u64;
                 let assigned_nodes = ai_job.assigned_nodes.clone();
-                
+
                 // Mark escrow as released
                 ai_job.escrow_released = true;
-                
+
                 // Distribute rewards after releasing the mutable borrow
                 let _ = contract;
                 for node_id in &assigned_nodes {
@@ -286,8 +292,6 @@ impl SmartContractEngine {
             Err(ContractError::InvalidState("Not an AI job contract".to_string()))
         }
     }
-
-
 
     // ============================================================================
     // Staking Contract Functions
@@ -341,24 +345,26 @@ impl SmartContractEngine {
         self.total_staked += amount;
         let pool_balance = self.staking_pools.get(&staker).unwrap_or(&0);
         self.staking_pools.insert(staker, pool_balance + amount);
-        
+
         self.contracts.insert(address.0.clone(), contract);
 
         Ok(address)
     }
 
     pub fn calculate_staking_rewards(&self, contract_address: &str) -> ContractResult<u64> {
-        let contract = self.contracts.get(contract_address)
+        let contract = self
+            .contracts
+            .get(contract_address)
             .ok_or_else(|| ContractError::ContractNotFound(contract_address.to_string()))?;
 
         if let Some(staking) = &contract.staking {
             let now = Utc::now();
             let time_staked = (now - staking.created_at).num_seconds() as u64;
             let annual_seconds = 365 * 24 * 3600;
-            
-            let rewards = (staking.amount as f64 * staking.reward_rate * time_staked as f64) 
+
+            let rewards = (staking.amount as f64 * staking.reward_rate * time_staked as f64)
                 / annual_seconds as f64;
-            
+
             Ok(rewards as u64)
         } else {
             Err(ContractError::InvalidState("Not a staking contract".to_string()))
@@ -366,25 +372,28 @@ impl SmartContractEngine {
     }
 
     pub fn unstake(&mut self, contract_address: &str) -> ContractResult<u64> {
-        let contract = self.contracts.get_mut(contract_address)
+        let contract = self
+            .contracts
+            .get_mut(contract_address)
             .ok_or_else(|| ContractError::ContractNotFound(contract_address.to_string()))?;
 
         if let Some(staking) = &mut contract.staking {
             let now = Utc::now();
             if now < staking.unlock_at {
-                return Err(ContractError::StakingError(
-                    format!("Staking period not completed. Unlock at: {}", staking.unlock_at)
-                ));
+                return Err(ContractError::StakingError(format!(
+                    "Staking period not completed. Unlock at: {}",
+                    staking.unlock_at
+                )));
             }
 
             // Calculate rewards before modifying contract
             let now = Utc::now();
             let time_staked = (now - staking.created_at).num_seconds() as u64;
             let annual_seconds = 365 * 24 * 3600;
-            let rewards = (staking.amount as f64 * staking.reward_rate * time_staked as f64) 
+            let rewards = (staking.amount as f64 * staking.reward_rate * time_staked as f64)
                 / annual_seconds as f64;
             let rewards = rewards as u64;
-            
+
             let total_return = staking.amount + rewards;
             let staker_address = staking.staker.clone();
             let staking_amount = staking.amount;
@@ -394,7 +403,7 @@ impl SmartContractEngine {
             staking.accumulated_rewards = rewards;
             contract.status = ContractStatus::Completed;
             contract.updated_at = now;
-            
+
             // Release the mutable borrow before updating balances
             let _ = contract;
 
@@ -419,7 +428,10 @@ impl SmartContractEngine {
     // Governance Contract Functions
     // ============================================================================
 
-    pub fn create_governance_contract(&mut self, creator: String) -> ContractResult<ContractAddress> {
+    pub fn create_governance_contract(
+        &mut self,
+        creator: String,
+    ) -> ContractResult<ContractAddress> {
         let creator_balance = self.balances.get(&creator).unwrap_or(&0);
         if *creator_balance < self.governance_threshold {
             return Err(ContractError::InsufficientBalance {
@@ -470,7 +482,9 @@ impl SmartContractEngine {
             });
         }
 
-        let contract = self.contracts.get_mut(contract_address)
+        let contract = self
+            .contracts
+            .get_mut(contract_address)
             .ok_or_else(|| ContractError::ContractNotFound(contract_address.to_string()))?;
 
         if let Some(governance) = &mut contract.governance {
@@ -512,12 +526,15 @@ impl SmartContractEngine {
             return Err(ContractError::UnauthorizedAccess("No staking power".to_string()));
         }
 
-        let contract = self.contracts.get_mut(contract_address)
+        let contract = self
+            .contracts
+            .get_mut(contract_address)
             .ok_or_else(|| ContractError::ContractNotFound(contract_address.to_string()))?;
 
         if let Some(governance) = &mut contract.governance {
-            let proposal = governance.proposals.get_mut(proposal_id)
-                .ok_or_else(|| ContractError::ContractNotFound(format!("Proposal {}", proposal_id)))?;
+            let proposal = governance.proposals.get_mut(proposal_id).ok_or_else(|| {
+                ContractError::ContractNotFound(format!("Proposal {}", proposal_id))
+            })?;
 
             if Utc::now() > proposal.voting_deadline {
                 return Err(ContractError::InvalidState("Voting period ended".to_string()));
@@ -557,15 +574,11 @@ impl SmartContractEngine {
     }
 
     pub fn get_active_contracts(&self) -> Vec<&SmartContract> {
-        self.contracts.values()
-            .filter(|c| matches!(c.status, ContractStatus::Active))
-            .collect()
+        self.contracts.values().filter(|c| matches!(c.status, ContractStatus::Active)).collect()
     }
 
     pub fn get_contracts_by_type(&self, contract_type: ContractType) -> Vec<&SmartContract> {
-        self.contracts.values()
-            .filter(|c| c.contract_type == contract_type)
-            .collect()
+        self.contracts.values().filter(|c| c.contract_type == contract_type).collect()
     }
 }
 
@@ -592,12 +605,7 @@ mod tests {
             privacy_level: "high".to_string(),
         };
 
-        let result = engine.create_ai_job_contract(
-            "client1".to_string(),
-            50000,
-            requirements,
-            24,
-        );
+        let result = engine.create_ai_job_contract("client1".to_string(), 50000, requirements, 24);
 
         assert!(result.is_ok());
         assert_eq!(engine.get_balance("client1"), 50000); // Escrow locked
@@ -611,7 +619,7 @@ mod tests {
         let result = engine.create_staking_contract(
             "staker1".to_string(),
             75000,
-            30, // 30 days
+            30,   // 30 days
             0.15, // 15% APR
         );
 
@@ -624,14 +632,16 @@ mod tests {
     fn test_governance_proposal() {
         let mut engine = SmartContractEngine::new();
         engine.set_balance("creator".to_string(), 300000); // Increased balance
-        
+
         // Create staking to have voting power
-        let _staking = engine.create_staking_contract(
-            "creator".to_string(),
-            100000, // Reduced stake amount
-            90,
-            0.12,
-        ).unwrap();
+        let _staking = engine
+            .create_staking_contract(
+                "creator".to_string(),
+                100000, // Reduced stake amount
+                90,
+                0.12,
+            )
+            .unwrap();
 
         let gov_result = engine.create_governance_contract("creator".to_string());
         assert!(gov_result.is_ok());
@@ -669,4 +679,4 @@ mod tests {
 
         assert!(matches!(result, Err(ContractError::InsufficientBalance { .. })));
     }
-} 
+}

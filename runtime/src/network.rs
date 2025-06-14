@@ -1,5 +1,5 @@
 //! Network integration layer bridging P2P communication with unified node architecture
-//! 
+//!
 //! This module provides the glue between libp2p networking and BCAI's distributed training system.
 
 use crate::node::{DistributedJob, NodeCapability, TrainingResult, UnifiedNode};
@@ -11,48 +11,21 @@ use thiserror::Error;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NetworkMessage {
     /// Announce node capabilities to the network
-    CapabilityAnnouncement {
-        node_id: String,
-        capability: NodeCapability,
-    },
+    CapabilityAnnouncement { node_id: String, capability: NodeCapability },
     /// Broadcast a new distributed job
-    JobPosted {
-        job: DistributedJob,
-        poster_id: String,
-    },
+    JobPosted { job: DistributedJob, poster_id: String },
     /// Request to join a distributed job
-    JobVolunteer {
-        job_id: u64,
-        node_id: String,
-        capability: NodeCapability,
-    },
+    JobVolunteer { job_id: u64, node_id: String, capability: NodeCapability },
     /// Training result submission
-    TrainingResultSubmission {
-        result: TrainingResult,
-        submitter_id: String,
-    },
+    TrainingResultSubmission { result: TrainingResult, submitter_id: String },
     /// Training result evaluation
-    TrainingEvaluation {
-        job_id: u64,
-        result_hash: String,
-        is_valid: bool,
-        evaluator_id: String,
-    },
+    TrainingEvaluation { job_id: u64, result_hash: String, is_valid: bool, evaluator_id: String },
     /// Job completion notification
-    JobCompleted {
-        job_id: u64,
-        final_model_hash: String,
-    },
+    JobCompleted { job_id: u64, final_model_hash: String },
     /// Request for network state synchronization
-    StateSync {
-        requesting_node: String,
-        last_known_block: u64,
-    },
+    StateSync { requesting_node: String, last_known_block: u64 },
     /// Response to state sync with network updates
-    StateSyncResponse {
-        jobs: Vec<DistributedJob>,
-        current_block: u64,
-    },
+    StateSyncResponse { jobs: Vec<DistributedJob>, current_block: u64 },
 }
 
 /// Network coordination errors
@@ -92,18 +65,22 @@ impl NetworkCoordinator {
     }
 
     /// Handle incoming network message
-    pub fn handle_message(&mut self, message: NetworkMessage, _sender_id: &str) -> Result<Vec<NetworkMessage>, NetworkError> {
+    pub fn handle_message(
+        &mut self,
+        message: NetworkMessage,
+        _sender_id: &str,
+    ) -> Result<Vec<NetworkMessage>, NetworkError> {
         let mut responses = Vec::new();
 
         match message {
             NetworkMessage::CapabilityAnnouncement { node_id, capability } => {
                 self.peer_capabilities.insert(node_id, capability);
-            },
+            }
 
             NetworkMessage::JobPosted { job, poster_id: _ } => {
                 // Add to global registry
                 self.global_job_registry.insert(job.id, job.clone());
-                
+
                 // Check if local node can handle this job
                 if self.can_handle_job(&job) {
                     responses.push(NetworkMessage::JobVolunteer {
@@ -112,24 +89,26 @@ impl NetworkCoordinator {
                         capability: self.local_node.capability.clone(),
                     });
                 }
-            },
+            }
 
             NetworkMessage::JobVolunteer { job_id, node_id, capability: _ } => {
                 if let Some(job) = self.global_job_registry.get_mut(&job_id) {
                     if job.assigned_workers.len() < 3 && !job.assigned_workers.contains(&node_id) {
                         job.assigned_workers.push(node_id);
-                        
+
                         // If we have enough workers, start training
                         if job.assigned_workers.len() >= 3 {
                             job.status = crate::node::JobStatus::WorkersAssigned;
                         }
                     }
                 }
-            },
+            }
 
             NetworkMessage::TrainingResultSubmission { result, submitter_id: _ } => {
                 // Store result for evaluation
-                if let Ok(is_valid) = self.local_node.evaluate_training_result(result.job_id, &result) {
+                if let Ok(is_valid) =
+                    self.local_node.evaluate_training_result(result.job_id, &result)
+                {
                     responses.push(NetworkMessage::TrainingEvaluation {
                         job_id: result.job_id,
                         result_hash: result.model_hash.clone(),
@@ -137,22 +116,27 @@ impl NetworkCoordinator {
                         evaluator_id: self.local_node.node_id.clone(),
                     });
                 }
-            },
+            }
 
-            NetworkMessage::TrainingEvaluation { job_id, result_hash: _, is_valid, evaluator_id } => {
+            NetworkMessage::TrainingEvaluation {
+                job_id,
+                result_hash: _,
+                is_valid,
+                evaluator_id,
+            } => {
                 // Collect evaluations
-                let evaluations = self.pending_evaluations.entry(job_id).or_insert_with(Vec::new);
+                let evaluations = self.pending_evaluations.entry(job_id).or_default();
                 evaluations.push((evaluator_id, is_valid));
-                
+
                 // Check if we have consensus (majority agreement)
                 if evaluations.len() >= 2 {
                     let valid_count = evaluations.iter().filter(|(_, valid)| *valid).count();
                     let total_count = evaluations.len();
-                    
+
                     if valid_count * 2 > total_count {
                         // Majority agrees it's valid - complete the job
                         if let Ok(()) = self.local_node.complete_distributed_job(job_id) {
-                            if self.global_job_registry.get(&job_id).is_some() {
+                            if self.global_job_registry.contains_key(&job_id) {
                                 responses.push(NetworkMessage::JobCompleted {
                                     job_id,
                                     final_model_hash: format!("final_model_{}", job_id),
@@ -162,26 +146,27 @@ impl NetworkCoordinator {
                         self.pending_evaluations.remove(&job_id);
                     }
                 }
-            },
+            }
 
             NetworkMessage::JobCompleted { job_id, final_model_hash: _ } => {
                 if let Some(job) = self.global_job_registry.get_mut(&job_id) {
                     job.status = crate::node::JobStatus::Completed;
                 }
-            },
+            }
 
             NetworkMessage::StateSync { requesting_node: _, last_known_block } => {
-                let jobs_to_sync: Vec<DistributedJob> = self.global_job_registry
+                let jobs_to_sync: Vec<DistributedJob> = self
+                    .global_job_registry
                     .values()
                     .filter(|job| job.created_block > last_known_block)
                     .cloned()
                     .collect();
-                
+
                 responses.push(NetworkMessage::StateSyncResponse {
                     jobs: jobs_to_sync,
                     current_block: self.network_block_height,
                 });
-            },
+            }
 
             NetworkMessage::StateSyncResponse { jobs, current_block } => {
                 // Update network state
@@ -189,7 +174,7 @@ impl NetworkCoordinator {
                     self.global_job_registry.insert(job.id, job);
                 }
                 self.network_block_height = current_block;
-            },
+            }
         }
 
         Ok(responses)
@@ -197,10 +182,10 @@ impl NetworkCoordinator {
 
     /// Check if local node can handle a job
     fn can_handle_job(&self, job: &DistributedJob) -> bool {
-        self.local_node.capability.cpus >= job.required_capability.cpus &&
-        self.local_node.capability.gpus >= job.required_capability.gpus &&
-        self.local_node.capability.gpu_memory_gb >= job.required_capability.gpu_memory_gb &&
-        self.local_node.staked() >= job.required_capability.available_stake
+        self.local_node.capability.cpus >= job.required_capability.cpus
+            && self.local_node.capability.gpus >= job.required_capability.gpus
+            && self.local_node.capability.gpu_memory_gb >= job.required_capability.gpu_memory_gb
+            && self.local_node.staked() >= job.required_capability.available_stake
     }
 
     /// Post a job to the network
@@ -225,16 +210,16 @@ impl NetworkCoordinator {
         let job = self.local_node.distributed_jobs().get(&job_id).unwrap().clone();
         self.global_job_registry.insert(job_id, job.clone());
 
-        Ok(NetworkMessage::JobPosted {
-            job,
-            poster_id: self.local_node.node_id.clone(),
-        })
+        Ok(NetworkMessage::JobPosted { job, poster_id: self.local_node.node_id.clone() })
     }
 
     /// Execute training for a job and broadcast results
-    pub fn execute_training_and_broadcast(&mut self, job_id: u64) -> Result<NetworkMessage, crate::node::NodeError> {
+    pub fn execute_training_and_broadcast(
+        &mut self,
+        job_id: u64,
+    ) -> Result<NetworkMessage, crate::node::NodeError> {
         let result = self.local_node.execute_training(job_id, 0x0000ffff)?;
-        
+
         Ok(NetworkMessage::TrainingResultSubmission {
             result,
             submitter_id: self.local_node.node_id.clone(),
@@ -245,10 +230,19 @@ impl NetworkCoordinator {
     pub fn get_network_stats(&self) -> NetworkStats {
         NetworkStats {
             connected_peers: self.peer_capabilities.len(),
-            active_jobs: self.global_job_registry.values()
-                .filter(|job| !matches!(job.status, crate::node::JobStatus::Completed | crate::node::JobStatus::Failed))
+            active_jobs: self
+                .global_job_registry
+                .values()
+                .filter(|job| {
+                    !matches!(
+                        job.status,
+                        crate::node::JobStatus::Completed | crate::node::JobStatus::Failed
+                    )
+                })
                 .count(),
-            completed_jobs: self.global_job_registry.values()
+            completed_jobs: self
+                .global_job_registry
+                .values()
                 .filter(|job| job.status == crate::node::JobStatus::Completed)
                 .count(),
             network_block_height: self.network_block_height,
@@ -286,7 +280,7 @@ impl NetworkCoordinator {
     pub fn global_jobs(&self) -> &HashMap<u64, DistributedJob> {
         &self.global_job_registry
     }
-    
+
     /// Get mutable reference to global job registry (for testing)
     pub fn global_jobs_mut(&mut self) -> &mut HashMap<u64, DistributedJob> {
         &mut self.global_job_registry
@@ -317,10 +311,10 @@ mod tests {
             available_stake: 0,
             reputation: 0,
         };
-        
+
         let node = UnifiedNode::new("test_node".to_string(), capability, 1000);
         let coordinator = NetworkCoordinator::new(node);
-        
+
         assert_eq!(coordinator.peer_capabilities.len(), 0);
         assert_eq!(coordinator.global_job_registry.len(), 0);
     }
@@ -334,16 +328,16 @@ mod tests {
             available_stake: 100,
             reputation: 0,
         };
-        
+
         // Create job poster
         let poster_node = UnifiedNode::new("poster".to_string(), capability.clone(), 1000);
         let mut poster_coordinator = NetworkCoordinator::new(poster_node);
-        
+
         // Create worker
         let worker_node = UnifiedNode::new("worker".to_string(), capability.clone(), 1000);
         let mut worker_coordinator = NetworkCoordinator::new(worker_node);
         worker_coordinator.local_node_mut().stake_tokens(150)?;
-        
+
         // Post job
         let job_message = poster_coordinator.post_job_to_network(
             "Test distributed training".to_string(),
@@ -353,11 +347,11 @@ mod tests {
             "model_spec".to_string(),
             100,
         )?;
-        
+
         // Worker receives job posting
         let responses = worker_coordinator.handle_message(job_message, "poster")?;
         assert_eq!(responses.len(), 1);
-        
+
         // Check that worker volunteered
         if let NetworkMessage::JobVolunteer { job_id, node_id, capability: _ } = &responses[0] {
             assert_eq!(*job_id, 1);
@@ -365,7 +359,7 @@ mod tests {
         } else {
             panic!("Expected JobVolunteer message");
         }
-        
+
         Ok(())
     }
-} 
+}

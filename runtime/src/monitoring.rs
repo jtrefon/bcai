@@ -181,7 +181,7 @@ impl MonitoringSystem {
             triggered_alerts: Vec::new(),
             last_alert_times: HashMap::new(),
         };
-        
+
         // Setup default alerts
         system.setup_default_alerts();
         system
@@ -189,10 +189,7 @@ impl MonitoringSystem {
 
     /// Collect system metrics
     pub fn collect_system_metrics(&mut self) -> Result<SystemMetrics, MonitoringError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         // In production, these would be collected from actual system monitoring
         let metrics = SystemMetrics {
@@ -214,7 +211,9 @@ impl MonitoringSystem {
     }
 
     /// Collect BCAI-specific metrics
-    pub fn collect_bcai_metrics(&mut self, 
+    #[allow(clippy::too_many_arguments)]
+    pub fn collect_bcai_metrics(
+        &mut self,
         active_nodes: u32,
         total_jobs: u32,
         completed_jobs: u32,
@@ -222,12 +221,9 @@ impl MonitoringSystem {
         total_transactions: u32,
         block_height: u64,
         validator_count: u32,
-        total_stake: u64
+        total_stake: u64,
     ) -> Result<BcaiMetrics, MonitoringError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let metrics = BcaiMetrics {
             timestamp,
@@ -252,17 +248,15 @@ impl MonitoringSystem {
     }
 
     /// Collect performance metrics
-    pub fn collect_performance_metrics(&mut self,
+    pub fn collect_performance_metrics(
+        &mut self,
         p2p_latency_ms: f64,
         consensus_latency_ms: f64,
         training_accuracy: f64,
         federated_rounds: u32,
-        pouw_solve_time_ms: f64
+        pouw_solve_time_ms: f64,
     ) -> Result<PerformanceMetrics, MonitoringError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let metrics = PerformanceMetrics {
             timestamp,
@@ -287,22 +281,13 @@ impl MonitoringSystem {
 
     /// Perform health checks
     pub fn perform_health_checks(&mut self) -> Result<Vec<HealthCheck>, MonitoringError> {
-        let mut health_checks = Vec::new();
-
-        // P2P Health Check
-        health_checks.push(self.check_p2p_health()?);
-        
-        // Blockchain Health Check
-        health_checks.push(self.check_blockchain_health()?);
-        
-        // Consensus Health Check
-        health_checks.push(self.check_consensus_health()?);
-        
-        // Storage Health Check
-        health_checks.push(self.check_storage_health()?);
-        
-        // Network Health Check
-        health_checks.push(self.check_network_health()?);
+        let health_checks = vec![
+            self.check_p2p_health()?,
+            self.check_blockchain_health()?,
+            self.check_consensus_health()?,
+            self.check_storage_health()?,
+            self.check_network_health()?,
+        ];
 
         // Update stored health checks
         for check in &health_checks {
@@ -347,10 +332,7 @@ impl MonitoringSystem {
     /// Check all alerts
     pub fn check_alerts(&mut self) -> Result<Vec<TriggeredAlert>, MonitoringError> {
         let mut new_alerts = Vec::new();
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         for alert in self.alerts.values() {
             if !alert.enabled {
@@ -402,17 +384,12 @@ impl MonitoringSystem {
         let latest_system_metrics = self.system_metrics.back().cloned();
         let latest_bcai_metrics = self.bcai_metrics.back().cloned();
         let latest_performance_metrics = self.performance_metrics.back().cloned();
-        
-        let active_alerts: Vec<TriggeredAlert> = self.triggered_alerts
-            .iter()
-            .filter(|a| !a.resolved)
-            .cloned()
-            .collect();
 
-        let critical_alerts_count = active_alerts
-            .iter()
-            .filter(|a| a.severity == AlertSeverity::Critical)
-            .count();
+        let active_alerts: Vec<TriggeredAlert> =
+            self.triggered_alerts.iter().filter(|a| !a.resolved).cloned().collect();
+
+        let critical_alerts_count =
+            active_alerts.iter().filter(|a| a.severity == AlertSeverity::Critical).count();
 
         MonitoringDashboard {
             system_health,
@@ -429,28 +406,30 @@ impl MonitoringSystem {
 
     /// Get historical metrics for charting
     pub fn get_historical_metrics(&self, metric_type: &str, hours: u32) -> Vec<(u64, f64)> {
-        let cutoff_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() - (hours as u64 * 3600);
+        let cutoff_time =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - (hours as u64 * 3600);
 
         match metric_type {
-            "cpu_usage" => self.system_metrics
+            "cpu_usage" => self
+                .system_metrics
                 .iter()
                 .filter(|m| m.timestamp >= cutoff_time)
                 .map(|m| (m.timestamp, m.cpu_usage_percent))
                 .collect(),
-            "memory_usage" => self.system_metrics
+            "memory_usage" => self
+                .system_metrics
                 .iter()
                 .filter(|m| m.timestamp >= cutoff_time)
                 .map(|m| (m.timestamp, m.memory_usage_bytes as f64))
                 .collect(),
-            "active_nodes" => self.bcai_metrics
+            "active_nodes" => self
+                .bcai_metrics
                 .iter()
                 .filter(|m| m.timestamp >= cutoff_time)
                 .map(|m| (m.timestamp, m.active_nodes as f64))
                 .collect(),
-            "training_accuracy" => self.performance_metrics
+            "training_accuracy" => self
+                .performance_metrics
                 .iter()
                 .filter(|m| m.timestamp >= cutoff_time)
                 .map(|m| (m.timestamp, m.training_accuracy))
@@ -512,20 +491,20 @@ impl MonitoringSystem {
     /// Individual health check implementations
     fn check_p2p_health(&self) -> Result<HealthCheck, MonitoringError> {
         let start_time = SystemTime::now();
-        
+
         // Simulate P2P health check
         let is_healthy = true; // In production: check peer connections, latency, etc.
         let latency = 50.0; // ms
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as f64;
-        
+
         Ok(HealthCheck {
             component: "P2P Network".to_string(),
             status: if is_healthy { HealthStatus::Healthy } else { HealthStatus::Critical },
-            message: if is_healthy { 
-                "P2P network operating normally".to_string() 
-            } else { 
-                "P2P network connectivity issues".to_string() 
+            message: if is_healthy {
+                "P2P network operating normally".to_string()
+            } else {
+                "P2P network connectivity issues".to_string()
             },
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             response_time_ms: response_time,
@@ -540,27 +519,30 @@ impl MonitoringSystem {
 
     fn check_blockchain_health(&self) -> Result<HealthCheck, MonitoringError> {
         let start_time = SystemTime::now();
-        
+
         // Simulate blockchain health check
         let is_synced = true;
         let block_height = 1000;
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as f64;
-        
+
         Ok(HealthCheck {
             component: "Blockchain".to_string(),
             status: if is_synced { HealthStatus::Healthy } else { HealthStatus::Warning },
-            message: if is_synced { 
-                "Blockchain fully synchronized".to_string() 
-            } else { 
-                "Blockchain synchronization lagging".to_string() 
+            message: if is_synced {
+                "Blockchain fully synchronized".to_string()
+            } else {
+                "Blockchain synchronization lagging".to_string()
             },
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             response_time_ms: response_time,
             details: {
                 let mut details = HashMap::new();
                 details.insert("block_height".to_string(), block_height.to_string());
-                details.insert("sync_status".to_string(), if is_synced { "synced" } else { "syncing" }.to_string());
+                details.insert(
+                    "sync_status".to_string(),
+                    if is_synced { "synced" } else { "syncing" }.to_string(),
+                );
                 details
             },
         })
@@ -568,20 +550,20 @@ impl MonitoringSystem {
 
     fn check_consensus_health(&self) -> Result<HealthCheck, MonitoringError> {
         let start_time = SystemTime::now();
-        
+
         // Simulate consensus health check
         let consensus_working = true;
         let validator_count = 10;
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as f64;
-        
+
         Ok(HealthCheck {
             component: "Consensus".to_string(),
             status: if consensus_working { HealthStatus::Healthy } else { HealthStatus::Critical },
-            message: if consensus_working { 
-                "Consensus mechanism functioning properly".to_string() 
-            } else { 
-                "Consensus mechanism failure detected".to_string() 
+            message: if consensus_working {
+                "Consensus mechanism functioning properly".to_string()
+            } else {
+                "Consensus mechanism failure detected".to_string()
             },
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             response_time_ms: response_time,
@@ -596,11 +578,11 @@ impl MonitoringSystem {
 
     fn check_storage_health(&self) -> Result<HealthCheck, MonitoringError> {
         let start_time = SystemTime::now();
-        
+
         // Simulate storage health check
         let _storage_healthy = true;
         let disk_usage_percent = 65.0;
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as f64;
         let status = if disk_usage_percent > 90.0 {
             HealthStatus::Critical
@@ -609,7 +591,7 @@ impl MonitoringSystem {
         } else {
             HealthStatus::Healthy
         };
-        
+
         Ok(HealthCheck {
             component: "Storage".to_string(),
             status,
@@ -627,13 +609,13 @@ impl MonitoringSystem {
 
     fn check_network_health(&self) -> Result<HealthCheck, MonitoringError> {
         let start_time = SystemTime::now();
-        
+
         // Simulate network health check
         let network_healthy = true;
         let bandwidth_usage_percent = 25.0;
-        
+
         let response_time = start_time.elapsed().unwrap().as_millis() as f64;
-        
+
         Ok(HealthCheck {
             component: "Network".to_string(),
             status: if network_healthy { HealthStatus::Healthy } else { HealthStatus::Warning },
@@ -642,7 +624,10 @@ impl MonitoringSystem {
             response_time_ms: response_time,
             details: {
                 let mut details = HashMap::new();
-                details.insert("bandwidth_usage_percent".to_string(), bandwidth_usage_percent.to_string());
+                details.insert(
+                    "bandwidth_usage_percent".to_string(),
+                    bandwidth_usage_percent.to_string(),
+                );
                 details.insert("active_connections".to_string(), "25".to_string());
                 details
             },
@@ -650,34 +635,69 @@ impl MonitoringSystem {
     }
 
     /// Helper methods for metric calculation (simplified for demo)
-    fn get_cpu_usage(&self) -> f64 { 45.0 } // Simulated
-    fn get_memory_usage(&self) -> u64 { 2_147_483_648 } // 2GB
-    fn get_disk_usage(&self) -> u64 { 10_737_418_240 } // 10GB  
-    fn get_network_in(&self) -> u64 { 1024000 }
-    fn get_network_out(&self) -> u64 { 512000 }
-    fn get_active_connections(&self) -> u32 { 15 }
-    fn get_thread_count(&self) -> u32 { 8 }
-    
-    fn calculate_avg_job_completion_time(&self) -> f64 { 2500.0 }
-    fn calculate_transaction_throughput(&self) -> f64 { 10.5 }
-    fn calculate_consensus_time(&self) -> f64 { 3000.0 }
-    fn calculate_network_hashrate(&self) -> f64 { 1000000.0 }
-    fn calculate_convergence_rate(&self) -> f64 { 0.95 }
-    fn calculate_sync_time(&self) -> f64 { 1500.0 }
-    fn calculate_memory_efficiency(&self) -> f64 { 0.85 }
-    fn calculate_uptime_percentage(&self) -> f64 { 99.8 }
+    fn get_cpu_usage(&self) -> f64 {
+        45.0
+    } // Simulated
+    fn get_memory_usage(&self) -> u64 {
+        2_147_483_648
+    } // 2GB
+    fn get_disk_usage(&self) -> u64 {
+        10_737_418_240
+    } // 10GB
+    fn get_network_in(&self) -> u64 {
+        1024000
+    }
+    fn get_network_out(&self) -> u64 {
+        512000
+    }
+    fn get_active_connections(&self) -> u32 {
+        15
+    }
+    fn get_thread_count(&self) -> u32 {
+        8
+    }
+
+    fn calculate_avg_job_completion_time(&self) -> f64 {
+        2500.0
+    }
+    fn calculate_transaction_throughput(&self) -> f64 {
+        10.5
+    }
+    fn calculate_consensus_time(&self) -> f64 {
+        3000.0
+    }
+    fn calculate_network_hashrate(&self) -> f64 {
+        1000000.0
+    }
+    fn calculate_convergence_rate(&self) -> f64 {
+        0.95
+    }
+    fn calculate_sync_time(&self) -> f64 {
+        1500.0
+    }
+    fn calculate_memory_efficiency(&self) -> f64 {
+        0.85
+    }
+    fn calculate_uptime_percentage(&self) -> f64 {
+        99.8
+    }
 
     fn get_current_metric_value(&self, metric: &str) -> Option<f64> {
         match metric {
             "cpu_usage_percent" => self.system_metrics.back().map(|m| m.cpu_usage_percent),
             "memory_usage_bytes" => self.system_metrics.back().map(|m| m.memory_usage_bytes as f64),
             "training_accuracy" => self.performance_metrics.back().map(|m| m.training_accuracy),
-            "consensus_latency_ms" => self.performance_metrics.back().map(|m| m.consensus_latency_ms),
+            "consensus_latency_ms" => {
+                self.performance_metrics.back().map(|m| m.consensus_latency_ms)
+            }
             _ => None,
         }
     }
 
-    fn check_performance_alerts(&mut self, metrics: &PerformanceMetrics) -> Result<(), MonitoringError> {
+    fn check_performance_alerts(
+        &mut self,
+        metrics: &PerformanceMetrics,
+    ) -> Result<(), MonitoringError> {
         // Check if training accuracy is too low
         if metrics.training_accuracy < 0.3 {
             return Err(MonitoringError::PerformanceThresholdExceeded {
@@ -685,15 +705,13 @@ impl MonitoringSystem {
                 value: metrics.training_accuracy,
             });
         }
-        
+
         Ok(())
     }
 
     fn cleanup_old_metrics(&mut self) {
-        let cutoff_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() - (self.config.metrics_retention_hours as u64 * 3600);
+        let cutoff_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+            - (self.config.metrics_retention_hours as u64 * 3600);
 
         // Clean system metrics
         while let Some(front) = self.system_metrics.front() {
@@ -746,7 +764,7 @@ mod tests {
     fn monitoring_system_creation() {
         let config = MonitoringConfig::default();
         let monitoring = MonitoringSystem::new(config);
-        
+
         assert_eq!(monitoring.system_metrics.len(), 0);
         assert_eq!(monitoring.alerts.len(), 4); // Default alerts
     }
@@ -754,10 +772,10 @@ mod tests {
     #[test]
     fn system_metrics_collection() {
         let mut monitoring = MonitoringSystem::new(MonitoringConfig::default());
-        
+
         let result = monitoring.collect_system_metrics();
         assert!(result.is_ok());
-        
+
         let metrics = result.unwrap();
         assert!(metrics.cpu_usage_percent >= 0.0);
         assert!(metrics.memory_usage_bytes > 0);
@@ -766,13 +784,13 @@ mod tests {
     #[test]
     fn health_checks() {
         let mut monitoring = MonitoringSystem::new(MonitoringConfig::default());
-        
+
         let health_checks = monitoring.perform_health_checks();
         assert!(health_checks.is_ok());
-        
+
         let checks = health_checks.unwrap();
         assert_eq!(checks.len(), 5); // P2P, Blockchain, Consensus, Storage, Network
-        
+
         for check in checks {
             assert!(!check.component.is_empty());
             assert!(check.response_time_ms >= 0.0);
@@ -782,7 +800,7 @@ mod tests {
     #[test]
     fn alert_management() {
         let mut monitoring = MonitoringSystem::new(MonitoringConfig::default());
-        
+
         // Add custom alert
         let custom_alert = Alert {
             id: "test_alert".to_string(),
@@ -794,8 +812,8 @@ mod tests {
             enabled: true,
             cooldown_seconds: 60,
         };
-        
+
         monitoring.add_alert(custom_alert);
         assert_eq!(monitoring.alerts.len(), 5); // 4 default + 1 custom
     }
-} 
+}

@@ -6,9 +6,9 @@
 //! - Performance metrics and alerting
 
 use runtime::{
-    monitoring::{MonitoringSystem, MonitoringConfig, AlertSeverity, HealthStatus},
-    security::{SecurityManager, RateLimitConfig, SecurityLevel, AuthCredentials},
+    monitoring::{AlertSeverity, HealthStatus, MonitoringConfig, MonitoringSystem},
     pouw::{generate_task, solve},
+    security::{AuthCredentials, RateLimitConfig, SecurityLevel, SecurityManager},
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 1: Initialize Production Monitoring
     println!("\n📊 Phase 1: Production Monitoring System");
-    
+
     let monitoring_config = MonitoringConfig {
         metrics_retention_hours: 48,
         health_check_interval_secs: 15,
@@ -31,7 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Collect system metrics
     let system_metrics = monitoring.collect_system_metrics()?;
-    println!("💻 System Load - CPU: {:.1}%, Memory: {:.1}GB, Disk: {:.1}GB", 
+    println!(
+        "💻 System Load - CPU: {:.1}%, Memory: {:.1}GB, Disk: {:.1}GB",
         system_metrics.cpu_usage_percent,
         system_metrics.memory_usage_bytes / (1024 * 1024 * 1024),
         system_metrics.disk_usage_bytes / (1024 * 1024 * 1024)
@@ -39,16 +40,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Collect BCAI metrics
     let bcai_metrics = monitoring.collect_bcai_metrics(
-        5,    // active nodes
-        100,  // total jobs
-        85,   // completed jobs  
-        15,   // pending jobs
-        500,  // total transactions
-        1000, // block height
-        5,    // validator count
+        5,       // active nodes
+        100,     // total jobs
+        85,      // completed jobs
+        15,      // pending jobs
+        500,     // total transactions
+        1000,    // block height
+        5,       // validator count
         2500000, // total stake
     )?;
-    println!("🔗 Network State - Nodes: {}, Jobs: {}/{}, TPS: {:.1}, Block: {}", 
+    println!(
+        "🔗 Network State - Nodes: {}, Jobs: {}/{}, TPS: {:.1}, Block: {}",
         bcai_metrics.active_nodes,
         bcai_metrics.completed_jobs,
         bcai_metrics.total_jobs,
@@ -58,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 2: Health Monitoring
     println!("\n🏥 Phase 2: System Health Monitoring");
-    
+
     let health_checks = monitoring.perform_health_checks()?;
     for check in &health_checks {
         let status_icon = match check.status {
@@ -67,11 +69,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             HealthStatus::Critical => "❌",
             HealthStatus::Unknown => "❓",
         };
-        println!("  {} {}: {} ({:.1}ms)", 
-            status_icon, 
-            check.component, 
-            check.message,
-            check.response_time_ms
+        println!(
+            "  {} {}: {} ({:.1}ms)",
+            status_icon, check.component, check.message, check.response_time_ms
         );
     }
 
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 3: Advanced Security System
     println!("\n🛡️ Phase 3: Production Security System");
-    
+
     let security_config = RateLimitConfig {
         max_requests_per_minute: 60,
         max_auth_attempts_per_hour: 5,
@@ -93,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Register secure nodes
     let security_nodes = vec![
         ("validator_1", SecurityLevel::Critical),
-        ("worker_1", SecurityLevel::High), 
+        ("worker_1", SecurityLevel::High),
         ("worker_2", SecurityLevel::High),
         ("edge_1", SecurityLevel::Medium),
         ("edge_2", SecurityLevel::Medium),
@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut node_credentials = Vec::new();
     for (node_id, security_level) in &security_nodes {
         let (private_key, public_key) = security_manager.register_node(node_id, *security_level)?;
-        
+
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let credentials = AuthCredentials {
             node_id: node_id.to_string(),
@@ -111,14 +111,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             timestamp,
             nonce: 12345,
         };
-        
+
         node_credentials.push((node_id.to_string(), credentials));
         println!("🔐 Registered {} with {:?} security clearance", node_id, security_level);
     }
 
     // Phase 4: Authentication Testing
     println!("\n🔑 Phase 4: Authentication & Authorization Testing");
-    
+
     // Test legitimate authentication
     for (node_id, credentials) in &node_credentials {
         match security_manager.authenticate(credentials) {
@@ -130,7 +130,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test permissions
     let operations = ["validate", "submit_job", "participate_training", "vote"];
     println!("\n🔓 Permission Testing:");
-    for (node_id, _) in &node_credentials[..2] { // Test first 2 nodes
+    for (node_id, _) in &node_credentials[..2] {
+        // Test first 2 nodes
         for operation in &operations {
             match security_manager.has_permission(node_id, operation) {
                 Ok(true) => println!("  ✅ {} can {}", node_id, operation),
@@ -142,7 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 5: Attack Detection Simulation
     println!("\n🚨 Phase 5: Attack Detection & Prevention");
-    
+
     let attack_scenarios = [
         ("brute_force_password_attempt", "suspicious_actor_1"),
         ("ddos_flood_attack", "botnet_node_2"),
@@ -158,22 +159,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 6: Performance Monitoring
     println!("\n⚡ Phase 6: Performance Monitoring & Benchmarks");
-    
+
     // PoUW Performance Benchmark
     let start_time = SystemTime::now();
     let task = generate_task(4, 1234);
     let solution = solve(&task, 0x0000ffff);
     let pouw_time = start_time.elapsed()?.as_millis();
-    
+
     // Collect performance metrics
     let performance_metrics = monitoring.collect_performance_metrics(
-        20.5,  // P2P latency
-        45.0,  // Consensus latency
-        0.94,  // Training accuracy
-        5,     // Federated rounds
-        pouw_time as f64 // PoUW solve time
+        20.5,             // P2P latency
+        45.0,             // Consensus latency
+        0.94,             // Training accuracy
+        5,                // Federated rounds
+        pouw_time as f64, // PoUW solve time
     )?;
-    
+
     println!("📈 Performance Metrics:");
     println!("  Training Accuracy: {:.1}%", performance_metrics.training_accuracy * 100.0);
     println!("  P2P Latency: {:.1}ms", performance_metrics.p2p_latency_ms);
@@ -182,7 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 7: Alert Management
     println!("\n🚨 Phase 7: Alert Management System");
-    
+
     let triggered_alerts = monitoring.check_alerts()?;
     if !triggered_alerts.is_empty() {
         println!("Active Alerts:");
@@ -190,10 +191,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let severity_icon = match alert.severity {
                 AlertSeverity::Critical => "🔴",
                 AlertSeverity::Error => "🟠",
-                AlertSeverity::Warning => "🟡", 
+                AlertSeverity::Warning => "🟡",
                 AlertSeverity::Info => "🔵",
             };
-            println!("  {} {} - {} ({})", severity_icon, alert.severity as u8, alert.message, alert.metric);
+            println!(
+                "  {} {} - {} ({})",
+                severity_icon, alert.severity as u8, alert.message, alert.metric
+            );
         }
     } else {
         println!("✅ No active alerts - all systems within normal parameters");
@@ -201,12 +205,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 8: Dashboard & Reporting
     println!("\n📊 Phase 8: Production Dashboard");
-    
+
     let dashboard = monitoring.get_dashboard_data();
     println!("Production Status:");
     println!("  System Health: {:?}", dashboard.system_health);
-    println!("  Total Alerts: {} (Critical: {})", 
-        dashboard.active_alerts.len(), 
+    println!(
+        "  Total Alerts: {} (Critical: {})",
+        dashboard.active_alerts.len(),
         dashboard.critical_alerts_count
     );
     println!("  System Uptime: {:.2}%", dashboard.uptime_percentage);
@@ -228,9 +233,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Performance: Continuous performance tracking");
     println!("✅ Alerting: Intelligent alert management system");
     println!("✅ Dashboard: Production-ready observability");
-    
+
     println!("\n🚀 BCAI Phase 2B Production Features - COMPLETE!");
     println!("Ready for enterprise deployment with full security and monitoring.");
 
     Ok(())
-} 
+}

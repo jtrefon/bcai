@@ -8,14 +8,13 @@
 
 use crate::{
     node::NodeCapability,
-    pouw::{Solution, Task, generate_task, verify_production},
+    pouw::{generate_task, verify_production, Solution, Task},
     token::TokenLedger,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 /// Blockchain errors
@@ -45,17 +44,9 @@ pub enum BlockchainError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Transaction {
     /// Token transfer between accounts
-    Transfer {
-        from: String,
-        to: String,
-        amount: u64,
-        fee: u64,
-    },
+    Transfer { from: String, to: String, amount: u64, fee: u64 },
     /// Stake tokens for validation rights
-    Stake {
-        validator: String,
-        amount: u64,
-    },
+    Stake { validator: String, amount: u64 },
     /// Post a new AI training job
     JobPosting {
         poster: String,
@@ -83,11 +74,7 @@ pub enum Transaction {
         stake_weight: u64,
     },
     /// Distribute rewards after successful training
-    RewardDistribution {
-        job_id: u64,
-        workers: Vec<String>,
-        amounts: Vec<u64>,
-    },
+    RewardDistribution { job_id: u64, workers: Vec<String>, amounts: Vec<u64> },
 }
 
 impl Transaction {
@@ -145,14 +132,11 @@ impl Block {
         pouw_task: Task,
         pouw_solution: Solution,
     ) -> Self {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let merkle_root = Self::calculate_merkle_root(&transactions);
         let state_root = "state_root_placeholder".to_string(); // Simplified
-        
+
         let mut block = Block {
             height,
             previous_hash,
@@ -180,19 +164,19 @@ impl Block {
 
         while hashes.len() > 1 {
             let mut next_level = Vec::new();
-            
+
             for chunk in hashes.chunks(2) {
                 let combined = if chunk.len() == 2 {
                     format!("{}{}", chunk[0], chunk[1])
                 } else {
                     format!("{}{}", chunk[0], chunk[0]) // Duplicate if odd
                 };
-                
+
                 let mut hasher = Sha256::new();
                 hasher.update(combined.as_bytes());
                 next_level.push(format!("{:x}", hasher.finalize()));
             }
-            
+
             hashes = next_level;
         }
 
@@ -203,7 +187,7 @@ impl Block {
     fn calculate_hash(block: &Block) -> String {
         let mut block_copy = block.clone();
         block_copy.hash = String::new(); // Don't include hash in hash calculation
-        
+
         let serialized = serde_json::to_string(&block_copy).unwrap_or_default();
         let mut hasher = Sha256::new();
         hasher.update(serialized.as_bytes());
@@ -368,17 +352,11 @@ impl Blockchain {
 
     /// Create genesis block
     fn create_genesis_block() -> Block {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let genesis_task = generate_task(2, 0); // Simple genesis task
-        let genesis_solution = Solution {
-            result: vec![vec![0, 0], vec![0, 0]],
-            nonce: 0,
-            computation_time: 0,
-        };
+        let genesis_solution =
+            Solution { result: vec![vec![0, 0], vec![0, 0]], nonce: 0, computation_time: 0 };
 
         Block {
             height: 0,
@@ -398,7 +376,7 @@ impl Blockchain {
     pub fn add_transaction(&mut self, tx: Transaction) -> Result<(), BlockchainError> {
         // Validate transaction
         self.validate_transaction(&tx)?;
-        
+
         // Add to pending pool if not full
         if self.pending_transactions.len() < self.config.max_block_size {
             self.pending_transactions.push_back(tx);
@@ -415,7 +393,7 @@ impl Blockchain {
                 let balance = self.state.token_ledger.balance(from);
                 if balance < amount + fee {
                     return Err(BlockchainError::InvalidTransaction(
-                        "Insufficient balance".to_string()
+                        "Insufficient balance".to_string(),
                     ));
                 }
             }
@@ -423,7 +401,7 @@ impl Blockchain {
                 let balance = self.state.token_ledger.balance(validator);
                 if balance < *amount {
                     return Err(BlockchainError::InvalidTransaction(
-                        "Insufficient balance for staking".to_string()
+                        "Insufficient balance for staking".to_string(),
                     ));
                 }
             }
@@ -431,14 +409,14 @@ impl Blockchain {
                 let balance = self.state.token_ledger.balance(poster);
                 if balance < reward + self.config.job_posting_fee {
                     return Err(BlockchainError::InvalidTransaction(
-                        "Insufficient balance for job posting".to_string()
+                        "Insufficient balance for job posting".to_string(),
                     ));
                 }
             }
             Transaction::ValidationVote { validator, .. } => {
                 if !self.validators.contains_key(validator) {
                     return Err(BlockchainError::InvalidTransaction(
-                        "Validator not registered".to_string()
+                        "Validator not registered".to_string(),
                     ));
                 }
             }
@@ -450,8 +428,8 @@ impl Blockchain {
     /// Mine a new block (for validators)
     pub fn mine_block(&mut self, validator: &str) -> Result<Block, BlockchainError> {
         // Check if validator has sufficient stake
-        let validator_info = self.validators.get(validator)
-            .ok_or(BlockchainError::InsufficientStake)?;
+        let validator_info =
+            self.validators.get(validator).ok_or(BlockchainError::InsufficientStake)?;
 
         if validator_info.stake < self.config.min_validator_stake {
             return Err(BlockchainError::InsufficientStake);
@@ -460,14 +438,13 @@ impl Blockchain {
         // Create new block
         let previous_block = self.blocks.last().unwrap();
         let height = previous_block.height + 1;
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         // Collect transactions for block
         let mut transactions = Vec::new();
-        while !self.pending_transactions.is_empty() && transactions.len() < self.config.max_block_size {
+        while !self.pending_transactions.is_empty()
+            && transactions.len() < self.config.max_block_size
+        {
             if let Some(tx) = self.pending_transactions.pop_front() {
                 transactions.push(tx);
             }
@@ -475,7 +452,7 @@ impl Blockchain {
 
         // Generate PoUW task for this block
         let pouw_task = generate_task(4, height);
-        
+
         // Solve PoUW (in production, this would be done by the validator)
         let pouw_solution = self.solve_pouw_for_block(&pouw_task)?;
 
@@ -554,7 +531,9 @@ impl Blockchain {
         // Validate validator has sufficient stake
         if let Some(validator_info) = self.validators.get(&block.validator) {
             if validator_info.stake < self.config.min_validator_stake {
-                return Err(BlockchainError::InvalidBlock("Validator insufficient stake".to_string()));
+                return Err(BlockchainError::InvalidBlock(
+                    "Validator insufficient stake".to_string(),
+                ));
             }
         } else {
             return Err(BlockchainError::InvalidBlock("Unknown validator".to_string()));
@@ -576,26 +555,44 @@ impl Blockchain {
     }
 
     /// Apply transaction to state
-    fn apply_transaction(&self, state: &mut BlockchainState, tx: &Transaction) -> Result<(), BlockchainError> {
+    fn apply_transaction(
+        &self,
+        state: &mut BlockchainState,
+        tx: &Transaction,
+    ) -> Result<(), BlockchainError> {
         match tx {
             Transaction::Transfer { from, to, amount, fee } => {
-                state.token_ledger.transfer(from, to, *amount)
+                state
+                    .token_ledger
+                    .transfer(from, to, *amount)
                     .map_err(|e| BlockchainError::InvalidTransaction(e.to_string()))?;
                 // Fee goes to validator (simplified)
                 state.token_ledger.mint("validator_pool", *fee);
             }
-            
+
             Transaction::Stake { validator, amount } => {
-                state.token_ledger.stake(validator, *amount)
+                state
+                    .token_ledger
+                    .stake(validator, *amount)
                     .map_err(|e| BlockchainError::InvalidTransaction(e.to_string()))?;
                 *state.validator_stakes.entry(validator.clone()).or_insert(0) += amount;
             }
-            
-            Transaction::JobPosting { poster, job_id, description, reward, requirements, data_hash, deadline } => {
+
+            Transaction::JobPosting {
+                poster,
+                job_id,
+                description,
+                reward,
+                requirements,
+                data_hash,
+                deadline,
+            } => {
                 // Escrow the reward
-                state.token_ledger.transfer(poster, "escrow", *reward)
+                state
+                    .token_ledger
+                    .transfer(poster, "escrow", *reward)
                     .map_err(|e| BlockchainError::InvalidTransaction(e.to_string()))?;
-                
+
                 // Create job state
                 let job_state = JobState {
                     job_id: *job_id,
@@ -610,11 +607,17 @@ impl Blockchain {
                     validator_votes: HashMap::new(),
                     status: JobStatus::Posted,
                 };
-                
+
                 state.active_jobs.insert(*job_id, job_state);
             }
-            
-            Transaction::TrainingSubmission { worker, job_id, result_hash, pouw_solution, accuracy_claim } => {
+
+            Transaction::TrainingSubmission {
+                worker,
+                job_id,
+                result_hash,
+                pouw_solution,
+                accuracy_claim,
+            } => {
                 if let Some(job) = state.active_jobs.get_mut(job_id) {
                     let submission = TrainingSubmission {
                         worker: worker.clone(),
@@ -623,12 +626,12 @@ impl Blockchain {
                         accuracy_claim: *accuracy_claim,
                         timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
                     };
-                    
+
                     job.submitted_results.insert(worker.clone(), submission);
                     job.status = JobStatus::ResultsSubmitted;
                 }
             }
-            
+
             Transaction::ValidationVote { validator, job_id, worker, is_valid, stake_weight } => {
                 if let Some(job) = state.active_jobs.get_mut(job_id) {
                     let vote = ValidationVote {
@@ -637,21 +640,23 @@ impl Blockchain {
                         stake_weight: *stake_weight,
                         timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
                     };
-                    
+
                     job.validator_votes.insert(format!("{}_{}", validator, worker), vote);
-                    
+
                     // Check if consensus reached
                     self.check_validation_consensus(state, *job_id)?;
                 }
             }
-            
+
             Transaction::RewardDistribution { job_id, workers, amounts } => {
                 // Distribute rewards from escrow
                 for (worker, amount) in workers.iter().zip(amounts.iter()) {
-                    state.token_ledger.transfer("escrow", worker, *amount)
+                    state
+                        .token_ledger
+                        .transfer("escrow", worker, *amount)
                         .map_err(|e| BlockchainError::InvalidTransaction(e.to_string()))?;
                 }
-                
+
                 // Move job to completed
                 if let Some(_job) = state.active_jobs.remove(job_id) {
                     let completed_job = CompletedJob {
@@ -669,14 +674,18 @@ impl Blockchain {
     }
 
     /// Check if validation consensus is reached for a job
-    fn check_validation_consensus(&self, state: &mut BlockchainState, job_id: u64) -> Result<(), BlockchainError> {
+    fn check_validation_consensus(
+        &self,
+        state: &mut BlockchainState,
+        job_id: u64,
+    ) -> Result<(), BlockchainError> {
         if let Some(job) = state.active_jobs.get_mut(&job_id) {
             let total_stake: u64 = self.validators.values().map(|v| v.stake).sum();
             let threshold_stake = (total_stake as f64 * self.config.consensus_threshold) as u64;
-            
+
             // Count stake for each worker's validation
             let mut worker_validations: HashMap<String, (u64, u64)> = HashMap::new(); // (positive_stake, negative_stake)
-            
+
             for vote in job.validator_votes.values() {
                 let entry = worker_validations.entry(vote.validator.clone()).or_insert((0, 0));
                 if vote.is_valid {
@@ -685,9 +694,9 @@ impl Blockchain {
                     entry.1 += vote.stake_weight;
                 }
             }
-            
+
             // Check if any worker has reached consensus
-            for (worker, (positive, negative)) in worker_validations {
+            for (_worker, (positive, negative)) in worker_validations {
                 if positive >= threshold_stake {
                     job.status = JobStatus::Completed;
                     break;
@@ -701,7 +710,11 @@ impl Blockchain {
     }
 
     /// Register a new validator
-    pub fn register_validator(&mut self, node_id: String, initial_stake: u64) -> Result<(), BlockchainError> {
+    pub fn register_validator(
+        &mut self,
+        node_id: String,
+        initial_stake: u64,
+    ) -> Result<(), BlockchainError> {
         if initial_stake < self.config.min_validator_stake {
             return Err(BlockchainError::InsufficientStake);
         }
@@ -756,7 +769,7 @@ impl Blockchain {
     /// Get pending transactions for block creation
     pub fn get_pending_transactions(&mut self, max_count: usize) -> Vec<Transaction> {
         let mut transactions = Vec::new();
-        
+
         for _ in 0..max_count {
             if let Some(tx) = self.pending_transactions.pop_front() {
                 transactions.push(tx);
@@ -764,7 +777,7 @@ impl Blockchain {
                 break;
             }
         }
-        
+
         transactions
     }
 
@@ -846,12 +859,14 @@ impl Blockchain {
 
     /// Adjust difficulty based on block times
     fn adjust_difficulty(&mut self) {
-        let recent_blocks = &self.blocks[self.blocks.len().saturating_sub(self.config.difficulty_adjustment_blocks as usize)..];
-        
+        let recent_blocks = &self.blocks
+            [self.blocks.len().saturating_sub(self.config.difficulty_adjustment_blocks as usize)..];
+
         if recent_blocks.len() >= 2 {
-            let time_span = recent_blocks.last().unwrap().timestamp - recent_blocks.first().unwrap().timestamp;
+            let time_span =
+                recent_blocks.last().unwrap().timestamp - recent_blocks.first().unwrap().timestamp;
             let target_time = self.config.block_time_secs * recent_blocks.len() as u64;
-            
+
             self.current_difficulty = crate::pouw::calculate_adaptive_difficulty(
                 self.current_difficulty,
                 target_time,
@@ -882,7 +897,7 @@ mod tests {
     fn blockchain_creation() {
         let config = BlockchainConfig::default();
         let blockchain = Blockchain::new(config);
-        
+
         assert_eq!(blockchain.blocks.len(), 1); // Genesis block
         assert_eq!(blockchain.latest_block().height, 0);
     }
@@ -890,10 +905,10 @@ mod tests {
     #[test]
     fn validator_registration() {
         let mut blockchain = Blockchain::new(BlockchainConfig::default());
-        
+
         let result = blockchain.register_validator("validator1".to_string(), 15000);
         assert!(result.is_ok());
-        
+
         let insufficient_stake = blockchain.register_validator("validator2".to_string(), 5000);
         assert!(insufficient_stake.is_err());
     }
@@ -901,27 +916,27 @@ mod tests {
     #[test]
     fn transaction_validation() {
         let blockchain = Blockchain::new(BlockchainConfig::default());
-        
+
         let invalid_tx = Transaction::Transfer {
             from: "alice".to_string(),
             to: "bob".to_string(),
             amount: 1000000, // More than possible balance
             fee: 10,
         };
-        
+
         assert!(blockchain.validate_transaction(&invalid_tx).is_err());
     }
 
     #[test]
     fn block_mining() {
         let mut blockchain = Blockchain::new(BlockchainConfig::default());
-        
+
         // Register validator
         blockchain.register_validator("validator1".to_string(), 15000).unwrap();
-        
+
         // Mine block
         let block = blockchain.mine_block("validator1").unwrap();
         assert_eq!(block.height, 1);
         assert_eq!(block.validator, "validator1");
     }
-} 
+}

@@ -1,14 +1,13 @@
-use crate::blockchain::{Blockchain, Block, Transaction, BlockchainError, BlockchainConfig};
-use crate::pouw::{generate_task, solve};
-use crate::node::NodeCapability;
+use crate::blockchain::{Block, Blockchain, BlockchainConfig, BlockchainError, Transaction};
 use crate::neural_network::NeuralNetwork;
+use crate::node::NodeCapability;
+use crate::pouw::{generate_task, solve};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, oneshot};
 use thiserror::Error;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Error, Debug)]
 pub enum ConsensusError {
@@ -79,7 +78,10 @@ pub struct ConsensusConfig {
 impl Default for ConsensusConfig {
     fn default() -> Self {
         ConsensusConfig {
-            node_id: format!("node_{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()),
+            node_id: format!(
+                "node_{}",
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+            ),
             mining_enabled: true,
             max_peers: 50,
             block_time_target: 60, // 1 minute blocks
@@ -100,11 +102,18 @@ pub struct ConsensusNode {
     peers: Arc<Mutex<HashMap<String, PeerInfo>>>,
     /// Mining statistics
     mining_stats: Arc<Mutex<MiningStats>>,
-    /// Message channels for networking
+    /// Message handling
+    #[allow(dead_code)]
     message_sender: mpsc::UnboundedSender<NetworkMessage>,
+    #[allow(dead_code)]
+    message_receiver: mpsc::UnboundedReceiver<NetworkMessage>,
+    /// Mining state
+    #[allow(dead_code)]
+    is_mining: bool,
     /// Shutdown signal
     shutdown_tx: Option<oneshot::Sender<()>>,
     /// Node capabilities
+    #[allow(dead_code)]
     capabilities: Vec<NodeCapability>,
 }
 
@@ -113,8 +122,8 @@ impl ConsensusNode {
     pub fn new(config: ConsensusConfig) -> ConsensusResult<Self> {
         let blockchain_config = BlockchainConfig::default();
         let blockchain = Arc::new(Mutex::new(Blockchain::new(blockchain_config)));
-        let (message_sender, _message_receiver) = mpsc::unbounded_channel();
-        
+        let (message_sender, message_receiver) = mpsc::unbounded_channel();
+
         let mining_stats = Arc::new(Mutex::new(MiningStats {
             blocks_mined: 0,
             current_difficulty: 0x0000ffff,
@@ -123,15 +132,13 @@ impl ConsensusNode {
             last_block_time: 0,
         }));
 
-        let capabilities = vec![
-            NodeCapability {
-                cpus: 4,
-                gpus: 1,
-                gpu_memory_gb: 8,
-                available_stake: 1000,
-                reputation: 100,
-            }
-        ];
+        let capabilities = vec![NodeCapability {
+            cpus: 4,
+            gpus: 1,
+            gpu_memory_gb: 8,
+            available_stake: 1000,
+            reputation: 100,
+        }];
 
         Ok(ConsensusNode {
             config,
@@ -139,6 +146,8 @@ impl ConsensusNode {
             peers: Arc::new(Mutex::new(HashMap::new())),
             mining_stats,
             message_sender,
+            message_receiver,
+            is_mining: false,
             shutdown_tx: None,
             capabilities,
         })
@@ -188,7 +197,8 @@ impl ConsensusNode {
                     let tip = blockchain.get_tip();
                     let tip_hash = tip.hash.clone();
                     let difficulty = blockchain.calculate_next_difficulty();
-                    let pending = blockchain.get_pending_transactions(config.max_transactions_per_block);
+                    let pending =
+                        blockchain.get_pending_transactions(config.max_transactions_per_block);
                     let current_height = blockchain.get_stats().block_height;
                     (tip_hash, difficulty, pending, current_height)
                 };
@@ -198,7 +208,7 @@ impl ConsensusNode {
                     let mut stats = mining_stats_clone.lock().unwrap();
                     stats.is_mining = true;
                     stats.current_difficulty = difficulty;
-                    
+
                     // Calculate hash rate
                     let now = SystemTime::now();
                     if let Ok(elapsed) = now.duration_since(last_hash_time) {
@@ -211,14 +221,17 @@ impl ConsensusNode {
                 }
 
                 // Generate PoUW task
-                let task = generate_task(4, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
-                
+                let task = generate_task(
+                    4,
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+                );
+
                 // Try to solve the task
                 let solution = solve(&task, difficulty);
                 hash_count += 1;
 
                 // Check if solution meets difficulty
-                                 if crate::pouw::verify_production(&task, &solution, difficulty) {
+                if crate::pouw::verify_production(&task, &solution, difficulty) {
                     // Create new block
                     let new_block = Block::new(
                         current_height + 1,
@@ -236,14 +249,17 @@ impl ConsensusNode {
                             if is_main_chain {
                                 let mut stats = mining_stats_clone.lock().unwrap();
                                 stats.blocks_mined += 1;
-                                stats.last_block_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-                                
-                                println!("⛏️  Mined new block #{} (difficulty: 0x{:08x})", 
-                                         new_block.height, difficulty);
-                                
+                                stats.last_block_time =
+                                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+                                println!(
+                                    "⛏️  Mined new block #{} (difficulty: 0x{:08x})",
+                                    new_block.height, difficulty
+                                );
+
                                 // In a real implementation, we would broadcast this block to peers
                             }
-                        },
+                        }
                         Err(e) => {
                             eprintln!("Failed to add mined block: {}", e);
                         }
@@ -270,7 +286,7 @@ impl ConsensusNode {
         // 2. Implement peer discovery mechanisms
         // 3. Handle message routing and validation
         // 4. Maintain peer reputation system
-        
+
         println!("🌐 Network layer initialized (simplified mode)");
         Ok(())
     }
@@ -282,7 +298,7 @@ impl ConsensusNode {
         // 2. Manage mempool prioritization
         // 3. Handle transaction relay to peers
         // 4. Implement fee market mechanisms
-        
+
         println!("📤 Transaction processor initialized");
         Ok(())
     }
@@ -290,14 +306,13 @@ impl ConsensusNode {
     /// Submit a new transaction to the network
     pub fn submit_transaction(&self, transaction: Transaction) -> ConsensusResult<String> {
         let tx_hash = transaction.hash();
-        
+
         // Add to blockchain mempool
-        self.blockchain.lock().unwrap()
-            .add_transaction(transaction.clone())?;
+        self.blockchain.lock().unwrap().add_transaction(transaction.clone())?;
 
         // In a real implementation, broadcast to peers
         println!("📤 Transaction submitted: {}", &tx_hash[..8]);
-        
+
         Ok(tx_hash)
     }
 
@@ -322,14 +337,18 @@ impl ConsensusNode {
     }
 
     /// Perform AI training and submit result as transaction
-    pub async fn train_and_submit(&self, job_id: u64, data_samples: usize) -> ConsensusResult<String> {
+    pub async fn train_and_submit(
+        &self,
+        job_id: u64,
+        data_samples: usize,
+    ) -> ConsensusResult<String> {
         // Use the neural network for training
         let mut network = NeuralNetwork::new(&[4, 8, 2], 0.01);
-        
+
         // Generate synthetic training data
         let mut inputs = Vec::new();
         let mut targets = Vec::new();
-        
+
         for i in 0..data_samples {
             let input = vec![
                 (i as f32 * 0.1) % 1.0,
@@ -347,29 +366,27 @@ impl ConsensusNode {
 
         // Train the network
         let epochs = 5;
-        let training_dataset = crate::neural_network::TrainingData { 
-            inputs,
-            targets
-        };
+        let training_dataset = crate::neural_network::TrainingData { inputs, targets };
         let metrics = network.train(&training_dataset, epochs);
-        
-        let final_accuracy = if let Some(last_metric) = metrics.last() {
-            last_metric.accuracy
-        } else {
-            0.0
-        };
+
+        let final_accuracy =
+            if let Some(last_metric) = metrics.last() { last_metric.accuracy } else { 0.0 };
 
         println!("Training completed with final accuracy: {:.4}", final_accuracy);
 
         // Create proof of work for the training
-        let task = generate_task(2, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
+        let task =
+            generate_task(2, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
         let solution = solve(&task, 0x0000ffff);
 
         // Create AI training submission transaction
         let tx = Transaction::TrainingSubmission {
             worker: self.config.node_id.clone(),
             job_id,
-            result_hash: format!("model_hash_{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()),
+            result_hash: format!(
+                "model_hash_{}",
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+            ),
             pouw_solution: solution,
             accuracy_claim: final_accuracy as f64,
         };
@@ -396,10 +413,7 @@ impl ConsensusNode {
     pub fn create_stake(&self, amount: u64) -> ConsensusResult<String> {
         let validator = &self.config.node_id;
 
-        let tx = Transaction::Stake {
-            validator: validator.clone(),
-            amount,
-        };
+        let tx = Transaction::Stake { validator: validator.clone(), amount };
 
         self.submit_transaction(tx)
     }
@@ -409,7 +423,7 @@ impl ConsensusNode {
         let blockchain = self.blockchain.lock().unwrap();
         let stats = blockchain.get_stats();
         let mut blocks = Vec::new();
-        
+
         let start_height = if stats.block_height >= count as u64 {
             stats.block_height - count as u64 + 1
         } else {
@@ -467,7 +481,7 @@ impl BlockchainExplorer {
             validator: block.validator.clone(),
             transaction_count: block.transactions.len(),
             difficulty: 0x0000ffff, // Simplified - would get from blockchain state
-            nonce: 0, // Simplified - would extract from PoUW solution
+            nonce: 0,               // Simplified - would extract from PoUW solution
             previous_hash: block.previous_hash.clone(),
             merkle_root: block.merkle_root.clone(),
         })
@@ -477,7 +491,7 @@ impl BlockchainExplorer {
     pub fn get_transaction_details(&self, tx_hash: &str) -> Option<TransactionDetails> {
         let blockchain = self.blockchain.lock().unwrap();
         let stats = blockchain.get_stats();
-        
+
         // Search through all blocks for the transaction
         // In a real implementation, we would have a transaction index
         for height in 0..=stats.block_height {
@@ -492,9 +506,13 @@ impl BlockchainExplorer {
                                 Transaction::Transfer { .. } => "Transfer".to_string(),
                                 Transaction::Stake { .. } => "Stake".to_string(),
                                 Transaction::JobPosting { .. } => "JobPosting".to_string(),
-                                Transaction::TrainingSubmission { .. } => "TrainingSubmission".to_string(),
+                                Transaction::TrainingSubmission { .. } => {
+                                    "TrainingSubmission".to_string()
+                                }
                                 Transaction::ValidationVote { .. } => "ValidationVote".to_string(),
-                                Transaction::RewardDistribution { .. } => "RewardDistribution".to_string(),
+                                Transaction::RewardDistribution { .. } => {
+                                    "RewardDistribution".to_string()
+                                }
                             },
                             from: tx.get_sender().to_string(),
                             nonce: tx.get_nonce(),
@@ -538,7 +556,7 @@ mod tests {
     async fn test_consensus_node_creation() {
         let config = ConsensusConfig::default();
         let node = ConsensusNode::new(config).unwrap();
-        
+
         let stats = node.get_blockchain_stats();
         assert_eq!(stats.block_height, 0); // Genesis block
     }
@@ -569,8 +587,8 @@ mod tests {
 
         // Get genesis block details
         let details = explorer.get_block_details(0).unwrap();
-        
+
         assert_eq!(details.height, 0);
         assert_eq!(details.transaction_count, 0);
     }
-} 
+}

@@ -1,9 +1,5 @@
-use runtime::{
-    ConsensusNode, ConsensusConfig, Transaction, 
-    Block, BlockchainStats, MiningStats
-};
 use clap::{Args, Parser, Subcommand};
-use serde_json;
+use runtime::{ConsensusConfig, ConsensusNode};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -217,15 +213,15 @@ async fn run_node(args: NodeArgs) -> Result<(), Box<dyn std::error::Error>> {
     let _ = node.create_stake(500);
 
     println!("⏱️  Node running for {} seconds...", args.duration);
-    
+
     // Run for specified duration
     for i in 0..args.duration {
         sleep(Duration::from_secs(1)).await;
-        
+
         if i % 10 == 0 && i > 0 {
             let stats = node.get_blockchain_stats();
             let mining_stats = node.get_mining_stats();
-            
+
             println!("📊 Status Update ({}s):", i);
             println!("   ⛓️  Height: {}", stats.block_height);
             println!("   📦 Total Blocks: {}", stats.active_validators);
@@ -239,7 +235,7 @@ async fn run_node(args: NodeArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Final statistics
     let final_stats = node.get_blockchain_stats();
     let final_mining = node.get_mining_stats();
-    
+
     println!("🏁 Final Results:");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("⛓️  Blockchain Height: {}", final_stats.block_height);
@@ -255,7 +251,7 @@ async fn run_node(args: NodeArgs) -> Result<(), Box<dyn std::error::Error>> {
 
 async fn mine_blocks(args: MineArgs) -> Result<(), Box<dyn std::error::Error>> {
     println!("⛏️  Mining {} blocks with node '{}'", args.blocks, args.node_id);
-    
+
     let config = ConsensusConfig {
         node_id: args.node_id,
         mining_enabled: true,
@@ -271,15 +267,17 @@ async fn mine_blocks(args: MineArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     while blocks_found < args.blocks {
         sleep(Duration::from_millis(100)).await;
-        
+
         let current_height = node.get_blockchain_stats().block_height;
         let new_blocks = current_height - start_height;
-        
+
         if new_blocks > blocks_found {
             blocks_found = new_blocks;
             let mining_stats = node.get_mining_stats();
-            println!("⛏️  Block #{} mined! (Hash rate: {:.1} H/s)", 
-                     current_height, mining_stats.hash_rate);
+            println!(
+                "⛏️  Block #{} mined! (Hash rate: {:.1} H/s)",
+                current_height, mining_stats.hash_rate
+            );
         }
     }
 
@@ -295,34 +293,38 @@ async fn submit_transaction(args: TransactionArgs) -> Result<(), Box<dyn std::er
     let tx_hash = match args.tx_type {
         TransactionType::Transfer { from, to, amount } => {
             println!("💸 Creating transfer: {} → {} ({} tokens)", from, to, amount);
-            
+
             // For demo purposes, create a node with the 'from' account
             let config = ConsensusConfig { node_id: from, ..Default::default() };
             let node = ConsensusNode::new(config)?;
             node.create_transfer(&to, amount)?
-        },
-        
+        }
+
         TransactionType::Stake { account, amount } => {
             println!("🥩 Creating stake: {} staking {} tokens", account, amount);
-            
+
             let config = ConsensusConfig { node_id: account, ..Default::default() };
             let node = ConsensusNode::new(config)?;
             node.create_stake(amount)?
-        },
-        
+        }
+
         TransactionType::AiResult { worker, job_id, accuracy } => {
-            println!("🤖 Submitting AI training result: worker={}, job={}, accuracy={:.2}%", 
-                     worker, job_id, accuracy * 100.0);
-            
+            println!(
+                "🤖 Submitting AI training result: worker={}, job={}, accuracy={:.2}%",
+                worker,
+                job_id,
+                accuracy * 100.0
+            );
+
             let config = ConsensusConfig { node_id: worker, ..Default::default() };
             let node = ConsensusNode::new(config)?;
             node.train_and_submit(job_id, 100).await?
-        },
+        }
     };
 
     println!("✅ Transaction submitted successfully!");
     println!("📋 Transaction Hash: {}", tx_hash);
-    
+
     Ok(())
 }
 
@@ -334,27 +336,32 @@ async fn query_blockchain(args: QueryArgs) -> Result<(), Box<dyn std::error::Err
         QueryType::Balance { account } => {
             let balance = node.get_balance(&account);
             println!("💰 Account '{}' balance: {} tokens", account, balance);
-        },
-        
+        }
+
         QueryType::Block { block } => {
             println!("📦 Block information for: {}", block);
             // In a real implementation, we'd parse height vs hash
             println!("(Block lookup by identifier not fully implemented in demo)");
-        },
-        
+        }
+
         QueryType::Transaction { hash } => {
             println!("📋 Transaction details for: {}", hash);
             println!("(Transaction lookup not fully implemented in demo)");
-        },
-        
+        }
+
         QueryType::Recent { count } => {
             let blocks = node.get_recent_blocks(count);
             println!("📚 {} most recent blocks:", blocks.len());
             for (i, block) in blocks.iter().enumerate() {
-                println!("  {}. Block #{} - {} transactions - Validator: {}", 
-                         i + 1, block.height, block.transactions.len(), block.validator);
+                println!(
+                    "  {}. Block #{} - {} transactions - Validator: {}",
+                    i + 1,
+                    block.height,
+                    block.transactions.len(),
+                    block.validator
+                );
             }
-        },
+        }
     }
 
     Ok(())
@@ -365,7 +372,7 @@ async fn run_demo(args: DemoArgs) -> Result<(), Box<dyn std::error::Error>> {
         DemoScenario::Mining { duration } => {
             println!("⛏️  BCAI Mining Demo ({} seconds)", duration);
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            
+
             let node_args = NodeArgs {
                 node_id: "demo_miner".to_string(),
                 mining: true,
@@ -373,59 +380,59 @@ async fn run_demo(args: DemoArgs) -> Result<(), Box<dyn std::error::Error>> {
                 max_tx: 50,
                 duration,
             };
-            
+
             run_node(node_args).await?;
-        },
-        
+        }
+
         DemoScenario::Transactions { count } => {
             println!("📤 BCAI Transaction Demo ({} transactions)", count);
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            
+
             let config = ConsensusConfig {
                 node_id: "tx_demo".to_string(),
                 mining_enabled: true,
                 block_time_target: 3,
                 ..Default::default()
             };
-            
+
             let mut node = ConsensusNode::new(config)?;
             node.start().await?;
-            
+
             // Submit various transaction types
             for i in 0..count {
                 match i % 3 {
                     0 => {
                         let _ = node.create_transfer(&format!("user_{}", i), 100 + i * 10);
                         println!("📤 Transfer transaction {} submitted", i + 1);
-                    },
+                    }
                     1 => {
                         let _ = node.create_stake(50 + i * 5);
                         println!("🥩 Stake transaction {} submitted", i + 1);
-                    },
+                    }
                     2 => {
                         let _ = node.train_and_submit(i, 50).await;
                         println!("🤖 AI training result {} submitted", i + 1);
-                    },
+                    }
                     _ => unreachable!(),
                 }
-                
+
                 sleep(Duration::from_millis(500)).await;
             }
-            
+
             println!("⏱️  Waiting for transactions to be mined...");
             sleep(Duration::from_secs(15)).await;
-            
+
             let final_stats = node.get_blockchain_stats();
             println!("✅ Demo completed! Final height: {}", final_stats.block_height);
-            
+
             node.stop()?;
-        },
-        
+        }
+
         DemoScenario::Consensus { nodes: _nodes, duration } => {
             println!("🤝 BCAI Consensus Demo");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             println!("Note: Multi-node consensus demo simplified for CLI");
-            
+
             let node_args = NodeArgs {
                 node_id: "consensus_demo".to_string(),
                 mining: true,
@@ -433,9 +440,9 @@ async fn run_demo(args: DemoArgs) -> Result<(), Box<dyn std::error::Error>> {
                 max_tx: 200,
                 duration,
             };
-            
+
             run_node(node_args).await?;
-        },
+        }
     }
 
     Ok(())
@@ -444,13 +451,13 @@ async fn run_demo(args: DemoArgs) -> Result<(), Box<dyn std::error::Error>> {
 async fn show_stats() -> Result<(), Box<dyn std::error::Error>> {
     println!("📊 BCAI Blockchain Statistics");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    
+
     let config = ConsensusConfig::default();
     let node = ConsensusNode::new(config)?;
-    
+
     let blockchain_stats = node.get_blockchain_stats();
     let mining_stats = node.get_mining_stats();
-    
+
     println!("⛓️  Blockchain State:");
     println!("   Height: {}", blockchain_stats.block_height);
     println!("   Total Blocks: {}", blockchain_stats.active_validators);
@@ -458,17 +465,17 @@ async fn show_stats() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Total Accounts: {}", blockchain_stats.active_validators);
     println!("   Current Difficulty: 0x{:08x}", blockchain_stats.current_difficulty);
     println!();
-    
+
     println!("⛏️  Mining State:");
     println!("   Blocks Mined: {}", mining_stats.blocks_mined);
     println!("   Is Mining: {}", if mining_stats.is_mining { "✅ Yes" } else { "❌ No" });
     println!("   Hash Rate: {:.1} H/s", mining_stats.hash_rate);
     println!("   Last Block Time: {}", mining_stats.last_block_time);
     println!();
-    
+
     println!("🌐 Network State:");
     println!("   Connected Peers: {}", node.get_peer_count());
     println!();
-    
+
     Ok(())
-} 
+}

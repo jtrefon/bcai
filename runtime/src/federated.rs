@@ -153,12 +153,15 @@ impl FederatedEngine {
 
         self.participants.insert(node_id, participant);
         println!("✅ Added federated participant: {} participants", self.participants.len());
-        
+
         Ok(())
     }
 
     /// Initialize federated learning with global model
-    pub fn initialize_global_model(&mut self, initial_model: ModelParameters) -> Result<(), FederatedError> {
+    pub fn initialize_global_model(
+        &mut self,
+        initial_model: ModelParameters,
+    ) -> Result<(), FederatedError> {
         if self.participants.len() < self.config.min_participants {
             return Err(FederatedError::InsufficientParticipants {
                 required: self.config.min_participants,
@@ -168,27 +171,28 @@ impl FederatedEngine {
 
         self.global_model = Some(initial_model);
         self.current_round = 0;
-        
+
         println!("🚀 Initialized federated learning with {} participants", self.participants.len());
         Ok(())
     }
 
     /// Perform federated averaging aggregation
-    pub fn aggregate_models(&mut self, local_models: Vec<(String, ModelParameters)>) -> Result<ModelParameters, FederatedError> {
+    pub fn aggregate_models(
+        &mut self,
+        local_models: Vec<(String, ModelParameters)>,
+    ) -> Result<ModelParameters, FederatedError> {
         if local_models.is_empty() {
-            return Err(FederatedError::InsufficientParticipants {
-                required: 1,
-                available: 0,
-            });
+            return Err(FederatedError::InsufficientParticipants { required: 1, available: 0 });
         }
 
         let start_time = Instant::now();
-        
+
         // Validate all models have the same structure
         let reference_model = &local_models[0].1;
         for (_node_id, model) in &local_models {
-            if model.weights.len() != reference_model.weights.len() ||
-               model.biases.len() != reference_model.biases.len() {
+            if model.weights.len() != reference_model.weights.len()
+                || model.biases.len() != reference_model.biases.len()
+            {
                 return Err(FederatedError::ModelDimensionMismatch {
                     expected: reference_model.weights.len(),
                     actual: model.weights.len(),
@@ -198,12 +202,8 @@ impl FederatedEngine {
 
         // Calculate weighted average based on strategy
         let aggregated_model = match &self.config.aggregation_strategy {
-            AggregationStrategy::FederatedAveraging => {
-                self.federated_averaging(&local_models)?
-            }
-            AggregationStrategy::WeightedAveraging => {
-                self.weighted_averaging(&local_models)?
-            }
+            AggregationStrategy::FederatedAveraging => self.federated_averaging(&local_models)?,
+            AggregationStrategy::WeightedAveraging => self.weighted_averaging(&local_models)?,
             AggregationStrategy::ReputationWeighted => {
                 self.reputation_weighted_averaging(&local_models)?
             }
@@ -226,21 +226,28 @@ impl FederatedEngine {
 
         self.training_history.push(round_record);
 
-        println!("📊 Federated round {} completed: {} participants, accuracy: {:.3}",
-                 self.current_round, local_models.len(), aggregated_model.metadata.accuracy);
+        println!(
+            "📊 Federated round {} completed: {} participants, accuracy: {:.3}",
+            self.current_round,
+            local_models.len(),
+            aggregated_model.metadata.accuracy
+        );
 
         Ok(aggregated_model)
     }
 
     /// Simple federated averaging
-    fn federated_averaging(&self, models: &[(String, ModelParameters)]) -> Result<ModelParameters, FederatedError> {
+    fn federated_averaging(
+        &self,
+        models: &[(String, ModelParameters)],
+    ) -> Result<ModelParameters, FederatedError> {
         let num_models = models.len() as f32;
         let reference_model = &models[0].1;
-        
+
         // Average weights
         let mut averaged_weights = vec![0.0; reference_model.weights.len()];
         let mut averaged_biases = vec![0.0; reference_model.biases.len()];
-        
+
         for (_, model) in models {
             for (i, &weight) in model.weights.iter().enumerate() {
                 averaged_weights[i] += weight / num_models;
@@ -251,7 +258,8 @@ impl FederatedEngine {
         }
 
         // Calculate average accuracy and loss
-        let avg_accuracy = models.iter().map(|(_, m)| m.metadata.accuracy).sum::<f32>() / num_models;
+        let avg_accuracy =
+            models.iter().map(|(_, m)| m.metadata.accuracy).sum::<f32>() / num_models;
         let avg_loss = models.iter().map(|(_, m)| m.metadata.loss).sum::<f32>() / num_models;
 
         Ok(ModelParameters {
@@ -274,24 +282,28 @@ impl FederatedEngine {
     }
 
     /// Weighted averaging based on data size
-    fn weighted_averaging(&self, models: &[(String, ModelParameters)]) -> Result<ModelParameters, FederatedError> {
+    fn weighted_averaging(
+        &self,
+        models: &[(String, ModelParameters)],
+    ) -> Result<ModelParameters, FederatedError> {
         let reference_model = &models[0].1;
-        let total_weight: f32 = models.iter()
+        let total_weight: f32 = models
+            .iter()
             .map(|(node_id, _)| {
-                self.participants.get(node_id)
-                    .map(|p| p.contribution_weight)
-                    .unwrap_or(1.0)
+                self.participants.get(node_id).map(|p| p.contribution_weight).unwrap_or(1.0)
             })
             .sum();
 
         let mut weighted_weights = vec![0.0; reference_model.weights.len()];
         let mut weighted_biases = vec![0.0; reference_model.biases.len()];
-        
+
         for (node_id, model) in models {
-            let weight = self.participants.get(node_id)
+            let weight = self
+                .participants
+                .get(node_id)
                 .map(|p| p.contribution_weight / total_weight)
                 .unwrap_or(1.0 / models.len() as f32);
-            
+
             for (i, &w) in model.weights.iter().enumerate() {
                 weighted_weights[i] += w * weight;
             }
@@ -301,18 +313,24 @@ impl FederatedEngine {
         }
 
         // Weighted average of accuracy and loss
-        let weighted_accuracy = models.iter()
+        let weighted_accuracy = models
+            .iter()
             .map(|(node_id, model)| {
-                let weight = self.participants.get(node_id)
+                let weight = self
+                    .participants
+                    .get(node_id)
                     .map(|p| p.contribution_weight / total_weight)
                     .unwrap_or(1.0 / models.len() as f32);
                 model.metadata.accuracy * weight
             })
             .sum();
 
-        let weighted_loss = models.iter()
+        let weighted_loss = models
+            .iter()
             .map(|(node_id, model)| {
-                let weight = self.participants.get(node_id)
+                let weight = self
+                    .participants
+                    .get(node_id)
                     .map(|p| p.contribution_weight / total_weight)
                     .unwrap_or(1.0 / models.len() as f32);
                 model.metadata.loss * weight
@@ -339,7 +357,10 @@ impl FederatedEngine {
     }
 
     /// Reputation-weighted averaging
-    fn reputation_weighted_averaging(&self, models: &[(String, ModelParameters)]) -> Result<ModelParameters, FederatedError> {
+    fn reputation_weighted_averaging(
+        &self,
+        models: &[(String, ModelParameters)],
+    ) -> Result<ModelParameters, FederatedError> {
         // For now, fall back to simple averaging
         // In a real implementation, this would weight by node reputation
         self.federated_averaging(models)
@@ -360,23 +381,21 @@ impl FederatedEngine {
 
         // Calculate variance in model parameters as convergence metric
         let mut param_variances = Vec::new();
-        
+
         for param_idx in 0..models[0].1.weights.len() {
-            let values: Vec<f32> = models.iter()
-                .map(|(_, model)| model.weights[param_idx])
-                .collect();
-            
+            let values: Vec<f32> =
+                models.iter().map(|(_, model)| model.weights[param_idx]).collect();
+
             let mean = values.iter().sum::<f32>() / values.len() as f32;
-            let variance = values.iter()
-                .map(|v| (v - mean).powi(2))
-                .sum::<f32>() / values.len() as f32;
-            
+            let variance =
+                values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / values.len() as f32;
+
             param_variances.push(variance);
         }
 
         // Return average variance (lower is better convergence)
         let avg_variance = param_variances.iter().sum::<f32>() / param_variances.len() as f32;
-        
+
         // Convert to convergence score (higher is better, 0-1 range)
         1.0 / (1.0 + avg_variance)
     }
@@ -387,21 +406,18 @@ impl FederatedEngine {
             return false;
         }
 
-        let recent_rounds = self.training_history.iter()
-            .rev()
-            .take(3)
-            .collect::<Vec<_>>();
+        let recent_rounds = self.training_history.iter().rev().take(3).collect::<Vec<_>>();
 
         // Check if convergence score has stabilized
-        let convergence_scores: Vec<f32> = recent_rounds.iter()
-            .map(|r| r.convergence_score)
-            .collect();
+        let convergence_scores: Vec<f32> =
+            recent_rounds.iter().map(|r| r.convergence_score).collect();
 
         if convergence_scores.len() < 2 {
             return false;
         }
 
-        let score_variance = convergence_scores.iter()
+        let score_variance = convergence_scores
+            .iter()
             .map(|&s| (s - convergence_scores[0]).abs())
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap_or(1.0);
@@ -419,22 +435,20 @@ impl FederatedEngine {
         FederatedStats {
             current_round: self.current_round,
             total_participants: self.participants.len(),
-            active_participants: self.participants.values()
+            active_participants: self
+                .participants
+                .values()
                 .filter(|p| p.last_update.elapsed() < self.config.participant_timeout)
                 .count(),
-            global_accuracy: self.global_model.as_ref()
-                .map(|m| m.metadata.accuracy)
-                .unwrap_or(0.0),
-            global_loss: self.global_model.as_ref()
-                .map(|m| m.metadata.loss)
-                .unwrap_or(0.0),
-            convergence_score: self.training_history.last()
+            global_accuracy: self.global_model.as_ref().map(|m| m.metadata.accuracy).unwrap_or(0.0),
+            global_loss: self.global_model.as_ref().map(|m| m.metadata.loss).unwrap_or(0.0),
+            convergence_score: self
+                .training_history
+                .last()
                 .map(|r| r.convergence_score)
                 .unwrap_or(0.0),
             has_converged: self.has_converged(),
-            total_training_time: self.training_history.iter()
-                .map(|r| r.duration)
-                .sum(),
+            total_training_time: self.training_history.iter().map(|r| r.duration).sum(),
         }
     }
 }
@@ -477,7 +491,7 @@ mod tests {
     fn federated_engine_creation() {
         let config = FederatedConfig::default();
         let engine = FederatedEngine::new(config);
-        
+
         assert_eq!(engine.current_round, 0);
         assert!(engine.global_model.is_none());
         assert_eq!(engine.participants.len(), 0);
@@ -493,24 +507,24 @@ mod tests {
             available_stake: 1000,
             reputation: 0,
         };
-        
+
         assert!(engine.add_participant("node1".to_string(), capability.clone(), 1000).is_ok());
         assert!(engine.add_participant("node2".to_string(), capability.clone(), 2000).is_ok());
-        
+
         assert_eq!(engine.participants.len(), 2);
     }
 
     #[test]
     fn federated_averaging() {
         let engine = FederatedEngine::new(FederatedConfig::default());
-        
+
         let models = vec![
             ("node1".to_string(), create_test_model(vec![1.0, 2.0, 3.0], 0.8)),
             ("node2".to_string(), create_test_model(vec![2.0, 3.0, 4.0], 0.9)),
         ];
-        
+
         let result = engine.federated_averaging(&models).unwrap();
-        
+
         assert_eq!(result.weights, vec![1.5, 2.5, 3.5]);
         assert_eq!(result.metadata.accuracy, 0.85); // (0.8 + 0.9) / 2
     }
@@ -520,7 +534,7 @@ mod tests {
         let mut config = FederatedConfig::default();
         config.convergence_threshold = 0.1; // More lenient threshold for test
         let mut engine = FederatedEngine::new(config);
-        
+
         // Simulate training rounds with small variance (converged)
         let rounds = vec![
             FederatedRound {
@@ -551,10 +565,10 @@ mod tests {
                 completed_at: Instant::now(),
             },
         ];
-        
+
         engine.training_history = rounds;
-        
+
         // With small variance (0.02 < 0.1), should detect convergence
         assert!(engine.has_converged());
     }
-} 
+}

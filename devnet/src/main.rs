@@ -40,13 +40,13 @@ enum Commands {
     /// Train a logistic regression model on the digits dataset
     Mnist,
     /// Train a neural network
-    Neural { 
+    Neural {
         #[arg(short, long, value_delimiter = ',')]
-        layers: Vec<usize>, 
+        layers: Vec<usize>,
         #[arg(short, long, default_value = "10")]
-        epochs: usize, 
+        epochs: usize,
         #[arg(short, long, default_value = "100")]
-        samples: usize 
+        samples: usize,
     },
     /// Manage jobs
     Job {
@@ -149,13 +149,18 @@ fn main() -> Result<(), DevnetError> {
                             println!("Neural Network Training Results:");
                             println!("Architecture: {:?}", layers);
                             for metric in metrics {
-                                println!("  Epoch {}: loss={:.4}, accuracy={:.3}, time={}ms", 
-                                         metric.epoch, metric.loss, metric.accuracy, metric.training_time_ms);
+                                println!(
+                                    "  Epoch {}: loss={:.4}, accuracy={:.3}, time={}ms",
+                                    metric.epoch,
+                                    metric.loss,
+                                    metric.accuracy,
+                                    metric.training_time_ms
+                                );
                             }
-                        },
+                        }
                         Err(e) => println!("neural network training failed: {e}"),
                     }
-                },
+                }
                 Commands::Job { job } => {
                     let mut jobs = load_jobs()?;
                     match job {
@@ -210,23 +215,27 @@ fn train_and_verify(size: usize, seed: u64, difficulty: u32) -> bool {
     evaluator.evaluate(&task, &solution, difficulty)
 }
 
-fn train_neural_network(layers: Vec<usize>, epochs: usize, samples: usize) -> Result<Vec<runtime::neural_network::TrainingMetrics>, String> {
-    use runtime::neural_network::{NeuralNetwork, generate_synthetic_data};
-    
+fn train_neural_network(
+    layers: Vec<usize>,
+    epochs: usize,
+    samples: usize,
+) -> Result<Vec<runtime::neural_network::TrainingMetrics>, String> {
+    use runtime::neural_network::{generate_synthetic_data, NeuralNetwork};
+
     if layers.len() < 2 {
         return Err("Neural network must have at least 2 layers (input and output)".to_string());
     }
-    
+
     // Create neural network
     let mut network = NeuralNetwork::new(&layers, 0.01);
-    
+
     // Generate training data
     let input_size = layers[0];
     let output_size = layers[layers.len() - 1];
     let data = generate_synthetic_data(samples, input_size, output_size);
-    
+
     // Train the network
     let metrics = network.train(&data, epochs as u32);
-    
+
     Ok(metrics)
 }

@@ -124,6 +124,12 @@ pub struct KeyManager {
     compromised_keys: Vec<String>,
 }
 
+impl Default for KeyManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeyManager {
     /// Create a new key manager
     pub fn new() -> Self {
@@ -140,17 +146,15 @@ impl KeyManager {
         // Simplified key generation (in production, use proper cryptographic libraries)
         let private_key = self.generate_private_key(node_id)?;
         let public_key = self.derive_public_key(&private_key)?;
-        
+
         self.private_keys.insert(node_id.to_string(), private_key.clone());
         self.public_keys.insert(node_id.to_string(), public_key.clone());
-        
+
         // Schedule key rotation in 30 days
-        let rotation_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() + 30 * 24 * 3600; // 30 days
+        let rotation_time =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 30 * 24 * 3600; // 30 days
         self.key_rotation_schedule.insert(node_id.to_string(), rotation_time);
-        
+
         Ok((private_key, public_key))
     }
 
@@ -161,11 +165,8 @@ impl KeyManager {
 
     /// Check if key rotation is needed
     pub fn needs_rotation(&self, node_id: &str) -> bool {
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-            
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
         self.key_rotation_schedule
             .get(node_id)
             .map(|&rotation_time| current_time >= rotation_time)
@@ -178,7 +179,7 @@ impl KeyManager {
         if let Some(old_key) = self.public_keys.get(node_id) {
             self.compromised_keys.push(old_key.clone());
         }
-        
+
         // Generate new key pair
         self.generate_keypair(node_id)
     }
@@ -190,9 +191,10 @@ impl KeyManager {
 
     /// Sign a message
     pub fn sign_message(&self, node_id: &str, message: &str) -> Result<String, SecurityError> {
-        let private_key = self.private_keys.get(node_id)
-            .ok_or_else(|| SecurityError::KeyManagementError("Private key not found".to_string()))?;
-        
+        let private_key = self.private_keys.get(node_id).ok_or_else(|| {
+            SecurityError::KeyManagementError("Private key not found".to_string())
+        })?;
+
         // Simplified signing (use proper crypto in production)
         let mut hasher = Sha256::new();
         hasher.update(message.as_bytes());
@@ -201,14 +203,21 @@ impl KeyManager {
     }
 
     /// Verify a signature
-    pub fn verify_signature(&self, node_id: &str, message: &str, signature: &str) -> Result<bool, SecurityError> {
-        let public_key = self.public_keys.get(node_id)
+    pub fn verify_signature(
+        &self,
+        node_id: &str,
+        message: &str,
+        signature: &str,
+    ) -> Result<bool, SecurityError> {
+        let public_key = self
+            .public_keys
+            .get(node_id)
             .ok_or_else(|| SecurityError::KeyManagementError("Public key not found".to_string()))?;
-        
+
         if self.is_key_compromised(public_key) {
             return Err(SecurityError::KeyManagementError("Key is compromised".to_string()));
         }
-        
+
         // Simplified verification (use proper crypto in production)
         let _private_key = self.private_keys.get(node_id).unwrap();
         let expected = self.sign_message(node_id, message)?;
@@ -219,7 +228,8 @@ impl KeyManager {
     fn generate_private_key(&self, node_id: &str) -> Result<String, SecurityError> {
         let mut hasher = Sha256::new();
         hasher.update(node_id.as_bytes());
-        hasher.update(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_le_bytes());
+        hasher
+            .update(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_le_bytes());
         Ok(format!("{:x}", hasher.finalize()))
     }
 
@@ -258,10 +268,14 @@ impl SecurityManager {
     }
 
     /// Register a new node with security credentials
-    pub fn register_node(&mut self, node_id: &str, security_level: SecurityLevel) -> Result<(String, String), SecurityError> {
+    pub fn register_node(
+        &mut self,
+        node_id: &str,
+        security_level: SecurityLevel,
+    ) -> Result<(String, String), SecurityError> {
         // Generate key pair
         let (private_key, public_key) = self.key_manager.generate_keypair(node_id)?;
-        
+
         // Set default permissions based on security level
         let permissions = AccessPermissions {
             can_validate: security_level >= SecurityLevel::High,
@@ -270,18 +284,21 @@ impl SecurityManager {
             can_vote: security_level >= SecurityLevel::Medium,
             security_clearance: security_level,
         };
-        
+
         self.access_permissions.insert(node_id.to_string(), permissions);
-        
+
         // Initialize attack metrics
-        self.attack_metrics.insert(node_id.to_string(), AttackMetrics {
-            failed_authentications: 0,
-            rate_limit_violations: 0,
-            suspicious_patterns: 0,
-            last_attack_time: None,
-            attack_source: None,
-        });
-        
+        self.attack_metrics.insert(
+            node_id.to_string(),
+            AttackMetrics {
+                failed_authentications: 0,
+                rate_limit_violations: 0,
+                suspicious_patterns: 0,
+                last_attack_time: None,
+                attack_source: None,
+            },
+        );
+
         self.log_security_event(SecurityEvent {
             event_type: SecurityEventType::AuthenticationSuccess,
             severity: SecurityLevel::Low,
@@ -290,37 +307,40 @@ impl SecurityManager {
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             metadata: HashMap::new(),
         });
-        
+
         Ok((private_key, public_key))
     }
 
     /// Authenticate a node
     pub fn authenticate(&mut self, credentials: &AuthCredentials) -> Result<(), SecurityError> {
         let node_id = &credentials.node_id;
-        
+
         // Check if node is banned
         if self.is_node_banned(node_id) {
             return Err(SecurityError::AuthorizationDenied("Node is banned".to_string()));
         }
-        
+
         // Check rate limits
         self.check_rate_limit(node_id)?;
-        
+
         // Verify timestamp (prevent replay attacks)
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        if current_time > credentials.timestamp + 300 { // 5 minute window
+        if current_time > credentials.timestamp + 300 {
+            // 5 minute window
             return Err(SecurityError::AuthenticationFailed("Timestamp too old".to_string()));
         }
-        
+
         // Verify signature
-        let message = format!("{}:{}:{}", credentials.node_id, credentials.timestamp, credentials.nonce);
-        let is_valid = self.key_manager.verify_signature(node_id, &message, &credentials.signature)?;
-        
+        let message =
+            format!("{}:{}:{}", credentials.node_id, credentials.timestamp, credentials.nonce);
+        let is_valid =
+            self.key_manager.verify_signature(node_id, &message, &credentials.signature)?;
+
         if !is_valid {
             self.record_failed_authentication(node_id);
             return Err(SecurityError::SignatureVerificationFailed);
         }
-        
+
         // Authentication successful
         self.log_security_event(SecurityEvent {
             event_type: SecurityEventType::AuthenticationSuccess,
@@ -330,15 +350,21 @@ impl SecurityManager {
             timestamp: current_time,
             metadata: HashMap::new(),
         });
-        
+
         Ok(())
     }
 
     /// Check if a node has permission for an operation
-    pub fn has_permission(&mut self, node_id: &str, operation: &str) -> Result<bool, SecurityError> {
-        let permissions = self.access_permissions.get(node_id)
+    pub fn has_permission(
+        &mut self,
+        node_id: &str,
+        operation: &str,
+    ) -> Result<bool, SecurityError> {
+        let permissions = self
+            .access_permissions
+            .get(node_id)
             .ok_or_else(|| SecurityError::AuthorizationDenied("Node not registered".to_string()))?;
-        
+
         let has_permission = match operation {
             "validate" => permissions.can_validate,
             "submit_job" => permissions.can_submit_jobs,
@@ -346,7 +372,7 @@ impl SecurityManager {
             "vote" => permissions.can_vote,
             _ => false,
         };
-        
+
         if !has_permission {
             self.log_security_event(SecurityEvent {
                 event_type: SecurityEventType::AuthorizationDenied,
@@ -357,15 +383,17 @@ impl SecurityManager {
                 metadata: HashMap::new(),
             });
         }
-        
+
         Ok(has_permission)
     }
 
     /// Encrypt sensitive data
     pub fn encrypt_data(&self, data: &str, node_id: &str) -> Result<String, SecurityError> {
-        let public_key = self.key_manager.get_public_key(node_id)
+        let public_key = self
+            .key_manager
+            .get_public_key(node_id)
             .ok_or_else(|| SecurityError::EncryptionError("Public key not found".to_string()))?;
-        
+
         // Simplified encryption (use proper crypto in production)
         let mut hasher = Sha256::new();
         hasher.update(data.as_bytes());
@@ -378,7 +406,7 @@ impl SecurityManager {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let mut attack_detected = false;
         let mut attack_type = String::new();
-        
+
         // Pattern-based attack detection
         if behavior.contains("brute_force") || behavior.contains("dictionary") {
             attack_detected = true;
@@ -390,20 +418,20 @@ impl SecurityManager {
             attack_detected = true;
             attack_type = "Injection Attack".to_string();
         }
-        
+
         if attack_detected {
             // Update attack metrics
             if let Some(metrics) = self.attack_metrics.get_mut(node_id) {
                 metrics.suspicious_patterns += 1;
                 metrics.last_attack_time = Some(current_time);
                 metrics.attack_source = Some(behavior.to_string());
-                
+
                 // Ban node if multiple attacks detected
                 if metrics.suspicious_patterns >= 3 {
                     self.ban_node(node_id, current_time + self.config.ban_duration_secs);
                 }
             }
-            
+
             let event = SecurityEvent {
                 event_type: SecurityEventType::AttackDetected,
                 severity: SecurityLevel::Critical,
@@ -417,25 +445,26 @@ impl SecurityManager {
                     meta
                 },
             };
-            
+
             self.log_security_event(event.clone());
             return Some(event);
         }
-        
+
         None
     }
 
     /// Get security statistics
     pub fn get_security_stats(&self) -> SecurityStats {
         let total_events = self.security_events.len();
-        let critical_events = self.security_events.iter()
-            .filter(|e| e.severity == SecurityLevel::Critical)
-            .count();
+        let critical_events =
+            self.security_events.iter().filter(|e| e.severity == SecurityLevel::Critical).count();
         let banned_nodes = self.banned_nodes.len();
-        let total_attack_attempts: u32 = self.attack_metrics.values()
+        let total_attack_attempts: u32 = self
+            .attack_metrics
+            .values()
             .map(|m| m.failed_authentications + m.suspicious_patterns)
             .sum();
-        
+
         SecurityStats {
             total_security_events: total_events,
             critical_events,
@@ -449,8 +478,8 @@ impl SecurityManager {
     /// Check rate limiting
     fn check_rate_limit(&mut self, node_id: &str) -> Result<(), SecurityError> {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let requests = self.rate_limits.entry(node_id.to_string()).or_insert_with(VecDeque::new);
-        
+        let requests = self.rate_limits.entry(node_id.to_string()).or_default();
+
         // Remove old requests (older than 1 minute)
         while let Some(&front_time) = requests.front() {
             if current_time - front_time > 60 {
@@ -459,13 +488,13 @@ impl SecurityManager {
                 break;
             }
         }
-        
+
         // Check if rate limit exceeded
         if requests.len() >= self.config.max_requests_per_minute as usize {
             if let Some(metrics) = self.attack_metrics.get_mut(node_id) {
                 metrics.rate_limit_violations += 1;
             }
-            
+
             self.log_security_event(SecurityEvent {
                 event_type: SecurityEventType::RateLimitExceeded,
                 severity: SecurityLevel::High,
@@ -474,10 +503,10 @@ impl SecurityManager {
                 timestamp: current_time,
                 metadata: HashMap::new(),
             });
-            
+
             return Err(SecurityError::RateLimitExceeded(node_id.to_string()));
         }
-        
+
         // Add current request
         requests.push_back(current_time);
         Ok(())
@@ -486,16 +515,16 @@ impl SecurityManager {
     /// Record failed authentication
     fn record_failed_authentication(&mut self, node_id: &str) {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        
+
         if let Some(metrics) = self.attack_metrics.get_mut(node_id) {
             metrics.failed_authentications += 1;
-            
+
             // Ban node if too many failed attempts
             if metrics.failed_authentications >= self.config.max_auth_attempts_per_hour {
                 self.ban_node(node_id, current_time + self.config.ban_duration_secs);
             }
         }
-        
+
         self.log_security_event(SecurityEvent {
             event_type: SecurityEventType::AuthenticationFailure,
             severity: SecurityLevel::Medium,
@@ -509,7 +538,7 @@ impl SecurityManager {
     /// Ban a node
     fn ban_node(&mut self, node_id: &str, ban_end_time: u64) {
         self.banned_nodes.insert(node_id.to_string(), ban_end_time);
-        
+
         self.log_security_event(SecurityEvent {
             event_type: SecurityEventType::SecurityViolation,
             severity: SecurityLevel::Critical,
@@ -523,7 +552,7 @@ impl SecurityManager {
     /// Check if node is banned
     fn is_node_banned(&mut self, node_id: &str) -> bool {
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        
+
         if let Some(&ban_end_time) = self.banned_nodes.get(node_id) {
             if current_time < ban_end_time {
                 return true;
@@ -532,7 +561,7 @@ impl SecurityManager {
                 self.banned_nodes.remove(node_id);
             }
         }
-        
+
         false
     }
 
@@ -542,7 +571,7 @@ impl SecurityManager {
         if self.security_events.len() >= 1000 {
             self.security_events.pop_front();
         }
-        
+
         self.security_events.push_back(event);
     }
 }
@@ -566,7 +595,7 @@ mod tests {
     fn key_manager_creation() {
         let mut key_manager = KeyManager::new();
         let result = key_manager.generate_keypair("test_node");
-        
+
         assert!(result.is_ok());
         let (private_key, public_key) = result.unwrap();
         assert!(!private_key.is_empty());
@@ -576,16 +605,16 @@ mod tests {
     #[test]
     fn security_manager_authentication() {
         let mut security_manager = SecurityManager::new(RateLimitConfig::default());
-        
+
         // Register node
         let result = security_manager.register_node("test_node", SecurityLevel::Medium);
         assert!(result.is_ok());
-        
+
         // Create valid credentials
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         let message = format!("test_node:{}:123", timestamp);
         let signature = security_manager.key_manager.sign_message("test_node", &message).unwrap();
-        
+
         let credentials = AuthCredentials {
             node_id: "test_node".to_string(),
             public_key: "test_key".to_string(),
@@ -593,26 +622,23 @@ mod tests {
             timestamp,
             nonce: 123,
         };
-        
+
         // Test authentication
         assert!(security_manager.authenticate(&credentials).is_ok());
     }
 
     #[test]
     fn rate_limiting() {
-        let config = RateLimitConfig {
-            max_requests_per_minute: 2,
-            ..Default::default()
-        };
+        let config = RateLimitConfig { max_requests_per_minute: 2, ..Default::default() };
         let mut security_manager = SecurityManager::new(config);
-        
+
         // Register node
         security_manager.register_node("test_node", SecurityLevel::Low).unwrap();
-        
+
         // First two requests should succeed
         assert!(security_manager.check_rate_limit("test_node").is_ok());
         assert!(security_manager.check_rate_limit("test_node").is_ok());
-        
+
         // Third request should fail
         assert!(security_manager.check_rate_limit("test_node").is_err());
     }
@@ -620,12 +646,12 @@ mod tests {
     #[test]
     fn attack_detection() {
         let mut security_manager = SecurityManager::new(RateLimitConfig::default());
-        
+
         let attack_event = security_manager.detect_attack("attacker_node", "brute_force_attempt");
         assert!(attack_event.is_some());
-        
+
         let event = attack_event.unwrap();
         assert_eq!(event.event_type, SecurityEventType::AttackDetected);
         assert_eq!(event.severity, SecurityLevel::Critical);
     }
-} 
+}

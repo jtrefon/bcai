@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+pub mod blockchain;
+pub mod consensus_node;
 pub mod evaluator;
 pub mod federated;
 pub mod gpu;
@@ -15,9 +17,9 @@ pub mod security;
 pub mod smart_contracts;
 pub mod token;
 pub mod trainer;
-pub mod blockchain;
-pub mod consensus_node;
 
+pub use blockchain::{Block, Blockchain, BlockchainError, BlockchainStats, Transaction};
+pub use consensus_node::{ConsensusConfig, ConsensusError, ConsensusNode, MiningStats};
 pub use evaluator::*;
 pub use federated::*;
 pub use gpu::*;
@@ -33,8 +35,6 @@ pub use security::*;
 pub use smart_contracts::*;
 pub use token::*;
 pub use trainer::*;
-pub use blockchain::{Blockchain, Block, Transaction, BlockchainError, BlockchainStats};
-pub use consensus_node::{ConsensusNode, ConsensusConfig, MiningStats, ConsensusError};
 
 /// Errors that can occur during VM execution.
 #[derive(Debug, Error, PartialEq, Eq)]

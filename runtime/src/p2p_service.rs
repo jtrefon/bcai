@@ -92,12 +92,9 @@ pub struct P2PService {
 
 impl P2PService {
     /// Create a new P2P service
-    pub fn new(
-        config: P2PConfig,
-        local_node: UnifiedNode,
-    ) -> (Self, P2PHandle) {
+    pub fn new(config: P2PConfig, local_node: UnifiedNode) -> (Self, P2PHandle) {
         let network_coordinator = NetworkCoordinator::new(local_node);
-        
+
         let service = Self {
             config,
             network_coordinator,
@@ -127,22 +124,22 @@ impl P2PService {
             },
             start_time: None,
         };
-        
+
         let handle = P2PHandle::new();
-        
+
         (service, handle)
     }
 
     /// Start the P2P service
     pub fn start(&mut self) -> Result<(), P2PError> {
         println!("🌐 Starting BCAI P2P Service on port {}", self.config.listen_port);
-        
+
         self.start_time = Some(Instant::now());
-        
+
         // Announce our capabilities to the network
         let announcement = self.network_coordinator.announce_capabilities();
         self.broadcast_message(announcement)?;
-        
+
         println!("✅ P2P service started");
         Ok(())
     }
@@ -154,19 +151,22 @@ impl P2PService {
         message: NetworkMessage,
     ) -> Result<(), P2PError> {
         self.stats.messages_received += 1;
-        
+
         // Update peer last seen
         if let Some(peer) = self.peers.get_mut(&sender_id) {
             peer.last_seen = Instant::now();
         } else {
             // New peer discovered
-            self.peers.insert(sender_id.clone(), PeerInfo {
-                peer_id: sender_id.clone(),
-                capabilities: None,
-                last_seen: Instant::now(),
-                reputation: 0,
-                connection_count: 1,
-            });
+            self.peers.insert(
+                sender_id.clone(),
+                PeerInfo {
+                    peer_id: sender_id.clone(),
+                    capabilities: None,
+                    last_seen: Instant::now(),
+                    reputation: 0,
+                    connection_count: 1,
+                },
+            );
         }
 
         // Process message through network coordinator
@@ -194,7 +194,7 @@ impl P2PService {
         // In a real implementation, this would use libp2p to send the message
         // For now, we simulate the sending
         println!("📤 Sending message to peer {}: {:?}", peer_id, message);
-        
+
         self.stats.messages_sent += 1;
         Ok(())
     }
@@ -202,14 +202,14 @@ impl P2PService {
     /// Broadcast message to all peers
     pub fn broadcast_message(&mut self, message: NetworkMessage) -> Result<(), P2PError> {
         println!("📢 Broadcasting message: {:?}", message);
-        
+
         // Collect peer IDs to avoid borrow checker issues
         let peer_ids: Vec<String> = self.peers.keys().cloned().collect();
-        
+
         for peer_id in peer_ids {
             self.send_to_peer(&peer_id, message.clone())?;
         }
-        
+
         Ok(())
     }
 
@@ -217,7 +217,7 @@ impl P2PService {
     pub fn perform_maintenance(&mut self) {
         let now = Instant::now();
         let timeout = Duration::from_secs(300); // 5 minutes
-        
+
         // Remove stale peers
         self.peers.retain(|peer_id, peer| {
             if now.duration_since(peer.last_seen) > timeout {
@@ -227,9 +227,9 @@ impl P2PService {
                 true
             }
         });
-        
+
         self.update_stats();
-        
+
         println!("💓 P2P heartbeat - Connected peers: {}", self.peers.len());
     }
 
@@ -238,7 +238,7 @@ impl P2PService {
         self.stats.peer_count = self.peers.len();
         self.stats.connected_peers = self.peers.len();
         self.stats.network_stats = self.network_coordinator.get_network_stats();
-        
+
         if let Some(start_time) = self.start_time {
             self.stats.uptime = Instant::now().duration_since(start_time);
         }
@@ -260,6 +260,12 @@ impl P2PService {
 #[derive(Clone)]
 pub struct P2PHandle {
     // Simplified handle without channels for now
+}
+
+impl Default for P2PHandle {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl P2PHandle {
@@ -326,10 +332,7 @@ impl P2PHandle {
 }
 
 /// Create a new P2P service for distributed BCAI
-pub fn create_p2p_service(
-    config: P2PConfig,
-    local_node: UnifiedNode,
-) -> (P2PService, P2PHandle) {
+pub fn create_p2p_service(config: P2PConfig, local_node: UnifiedNode) -> (P2PService, P2PHandle) {
     P2PService::new(config, local_node)
 }
 
@@ -348,10 +351,10 @@ mod tests {
             available_stake: 0,
             reputation: 0,
         };
-        
+
         let node = UnifiedNode::new("test_node".to_string(), capability, 1000);
         let (_service, _handle) = create_p2p_service(config, node);
-        
+
         // Test passes if creation succeeds
     }
 
@@ -365,11 +368,11 @@ mod tests {
             timestamp: 1234567890,
             signature: None,
         };
-        
+
         // Test that the message can be cloned
         let _cloned = message.clone();
-        
+
         assert_eq!(message.from_peer, "peer1");
         assert_eq!(message.to_peer, Some("peer2".to_string()));
     }
-} 
+}
