@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn html_contains_job_reward() {
-        let jobs = vec![Job { id: "1".into(), data: Vec::new(), reward: 10 }];
+        let jobs = vec![Job { id: "1".into(), data: Vec::new(), reward: 10, worker: None }];
         let html = render_jobs(&jobs);
         assert!(html.contains("reward:10"));
     }
