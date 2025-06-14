@@ -22,6 +22,36 @@ chrono = { version = "0.4.41", features = ["serde"] }
 clap = { version = "4.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 num-complex = "0.4"
+pyo3 = { version = "0.20", features = ["auto-initialize"] }
+ndarray = "0.15"
+candle-core = "0.3"
+candle-nn = "0.3"
+tch = { version = "0.15", optional = true }
+cuda-runtime-sys = { version = "0.3", optional = true }
+metal = { version = "0.27", optional = true }
+libc = "0.2"
+dashmap = "5.5"
+crossbeam = "0.8"
+parking_lot = "0.12"
+mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 keygen_lib = { package = "keygen", path = "../keygen" }
+criterion = "0.5"
+proptest = "1.0"
+tokio-test = "0.4"
+
+[features]
+default = ["enhanced-vm"]
+enhanced-vm = []
+cuda = ["cuda-runtime-sys", "tch"]
+metal-gpu = ["metal"]
+pytorch = ["tch"]
+
+[[bench]]
+name = "tensor_operations"
+harness = false
+
+[[bench]]
+name = "vm_performance"
+harness = false

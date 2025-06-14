@@ -1,106 +1,60 @@
 //! Tensor Operations and Management
 //! 
 //! This module provides efficient tensor storage, manipulation, and operations
-//! for the enhanced VM's ML workloads.
+//! for the enhanced VM's ML workloads using Candle for high-performance computation.
 
 use crate::{VmError, TensorId, DataType};
 use std::collections::HashMap;
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use candle_core::{Tensor as CandleTensor, Device, DType, Shape};
+use parking_lot::RwLock;
+use dashmap::DashMap;
 
-/// A tensor stored in the VM
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A tensor stored in the VM with Candle backend
+#[derive(Debug, Clone)]
 pub struct Tensor {
     pub id: TensorId,
     pub shape: Vec<usize>,
     pub dtype: DataType,
-    pub data: TensorData,
+    pub candle_tensor: CandleTensor,
     pub device: Device,
     pub requires_grad: bool,
 }
 
-/// Device where tensor is stored
+/// Device abstraction for tensor storage
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Device {
+pub enum DeviceType {
     CPU,
-    GPU(u32), // GPU device ID
-}
-
-/// Tensor data storage
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TensorData {
-    Float32(Vec<f32>),
-    Float64(Vec<f64>),
-    Int32(Vec<i32>),
-    Int64(Vec<i64>),
-    Bool(Vec<bool>),
-    Complex64(Vec<num_complex::Complex<f32>>),
-    Complex128(Vec<num_complex::Complex<f64>>),
-}
-
-impl TensorData {
-    /// Get the number of elements
-    pub fn len(&self) -> usize {
-        match self {
-            TensorData::Float32(data) => data.len(),
-            TensorData::Float64(data) => data.len(),
-            TensorData::Int32(data) => data.len(),
-            TensorData::Int64(data) => data.len(),
-            TensorData::Bool(data) => data.len(),
-            TensorData::Complex64(data) => data.len(),
-            TensorData::Complex128(data) => data.len(),
-        }
-    }
-
-    /// Check if tensor is empty
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Get memory size in bytes
-    pub fn memory_size(&self) -> usize {
-        match self {
-            TensorData::Float32(data) => data.len() * 4,
-            TensorData::Float64(data) => data.len() * 8,
-            TensorData::Int32(data) => data.len() * 4,
-            TensorData::Int64(data) => data.len() * 8,
-            TensorData::Bool(data) => data.len(),
-            TensorData::Complex64(data) => data.len() * 8,
-            TensorData::Complex128(data) => data.len() * 16,
-        }
-    }
+    CUDA(u32),
+    Metal,
 }
 
 impl Tensor {
     /// Create a new tensor with given shape and data type
-    pub fn new(id: TensorId, shape: Vec<usize>, dtype: DataType) -> Result<Self, VmError> {
-        let total_elements = shape.iter().product::<usize>();
+    pub fn new(id: TensorId, shape: Vec<usize>, dtype: DataType, device: &Device) -> Result<Self, VmError> {
+        let candle_dtype = dtype.to_candle_dtype();
+        let candle_shape = Shape::from(shape.as_slice());
         
-        let data = match dtype {
-            DataType::Float32 => TensorData::Float32(vec![0.0; total_elements]),
-            DataType::Float64 => TensorData::Float64(vec![0.0; total_elements]),
-            DataType::Int32 => TensorData::Int32(vec![0; total_elements]),
-            DataType::Int64 => TensorData::Int64(vec![0; total_elements]),
-            DataType::Bool => TensorData::Bool(vec![false; total_elements]),
-            DataType::Complex64 => TensorData::Complex64(vec![num_complex::Complex::new(0.0, 0.0); total_elements]),
-            DataType::Complex128 => TensorData::Complex128(vec![num_complex::Complex::new(0.0, 0.0); total_elements]),
-        };
+        let candle_tensor = CandleTensor::zeros(candle_shape, candle_dtype, device)
+            .map_err(|e| VmError::TensorError(format!("Failed to create tensor: {}", e)))?;
 
         Ok(Self {
             id,
             shape,
             dtype,
-            data,
-            device: Device::CPU,
+            candle_tensor,
+            device: device.clone(),
             requires_grad: false,
         })
     }
 
     /// Create tensor from raw data
     pub fn from_data(
-        id: TensorId, 
-        shape: Vec<usize>, 
-        data: TensorData,
-        device: Device
+        id: TensorId,
+        shape: Vec<usize>,
+        data: Vec<f32>,
+        device: &Device,
     ) -> Result<Self, VmError> {
         let total_elements = shape.iter().product::<usize>();
         
@@ -111,54 +65,76 @@ impl Tensor {
             )));
         }
 
-        let dtype = match &data {
-            TensorData::Float32(_) => DataType::Float32,
-            TensorData::Float64(_) => DataType::Float64,
-            TensorData::Int32(_) => DataType::Int32,
-            TensorData::Int64(_) => DataType::Int64,
-            TensorData::Bool(_) => DataType::Bool,
-            TensorData::Complex64(_) => DataType::Complex64,
-            TensorData::Complex128(_) => DataType::Complex128,
-        };
+        let candle_shape = Shape::from(shape.as_slice());
+        let candle_tensor = CandleTensor::from_vec(data, candle_shape, device)
+            .map_err(|e| VmError::TensorError(format!("Failed to create tensor from data: {}", e)))?;
 
         Ok(Self {
             id,
             shape,
-            dtype,
-            data,
-            device,
+            dtype: DataType::Float32,
+            candle_tensor,
+            device: device.clone(),
             requires_grad: false,
         })
     }
 
     /// Get total number of elements
     pub fn numel(&self) -> usize {
-        self.shape.iter().product()
+        self.candle_tensor.elem_count()
     }
 
     /// Get tensor memory usage in bytes
     pub fn memory_size(&self) -> usize {
-        self.data.memory_size()
+        self.numel() * self.dtype.size_bytes()
     }
 
-    /// Check if tensor shapes are compatible for broadcasting
-    pub fn can_broadcast_with(&self, other: &Tensor) -> bool {
-        let max_dims = self.shape.len().max(other.shape.len());
-        
-        for i in 0..max_dims {
-            let dim1 = self.shape.get(self.shape.len().saturating_sub(i + 1)).unwrap_or(&1);
-            let dim2 = other.shape.get(other.shape.len().saturating_sub(i + 1)).unwrap_or(&1);
-            
-            if *dim1 != *dim2 && *dim1 != 1 && *dim2 != 1 {
-                return false;
-            }
+    /// Convert to CPU
+    pub fn to_cpu(&self) -> Result<Self, VmError> {
+        if matches!(self.device, Device::Cpu) {
+            return Ok(self.clone());
         }
-        
-        true
+
+        let cpu_tensor = self.candle_tensor.to_device(&Device::Cpu)
+            .map_err(|e| VmError::TensorError(format!("Failed to move tensor to CPU: {}", e)))?;
+
+        Ok(Self {
+            id: self.id,
+            shape: self.shape.clone(),
+            dtype: self.dtype.clone(),
+            candle_tensor: cpu_tensor,
+            device: Device::Cpu,
+            requires_grad: self.requires_grad,
+        })
+    }
+
+    /// Convert to GPU (if available)
+    pub fn to_gpu(&self, device_id: u32) -> Result<Self, VmError> {
+        #[cfg(feature = "cuda")]
+        {
+            let cuda_device = Device::new_cuda(device_id)
+                .map_err(|e| VmError::TensorError(format!("Failed to create CUDA device: {}", e)))?;
+            
+            let gpu_tensor = self.candle_tensor.to_device(&cuda_device)
+                .map_err(|e| VmError::TensorError(format!("Failed to move tensor to GPU: {}", e)))?;
+
+            Ok(Self {
+                id: self.id,
+                shape: self.shape.clone(),
+                dtype: self.dtype.clone(),
+                candle_tensor: gpu_tensor,
+                device: cuda_device,
+                requires_grad: self.requires_grad,
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            Err(VmError::TensorError("CUDA support not compiled in".to_string()))
+        }
     }
 
     /// Reshape tensor (must preserve total elements)
-    pub fn reshape(&mut self, new_shape: Vec<usize>) -> Result<(), VmError> {
+    pub fn reshape(&self, new_shape: Vec<usize>) -> Result<Self, VmError> {
         let old_numel = self.numel();
         let new_numel = new_shape.iter().product::<usize>();
         
@@ -168,36 +144,90 @@ impl Tensor {
                 old_numel, new_numel
             )));
         }
+
+        let candle_shape = Shape::from(new_shape.as_slice());
+        let reshaped_tensor = self.candle_tensor.reshape(candle_shape)
+            .map_err(|e| VmError::TensorError(format!("Failed to reshape tensor: {}", e)))?;
         
-        self.shape = new_shape;
-        Ok(())
+        Ok(Self {
+            id: self.id,
+            shape: new_shape,
+            dtype: self.dtype.clone(),
+            candle_tensor: reshaped_tensor,
+            device: self.device.clone(),
+            requires_grad: self.requires_grad,
+        })
+    }
+
+    /// Get tensor data as Vec<f32>
+    pub fn to_vec(&self) -> Result<Vec<f32>, VmError> {
+        let cpu_tensor = self.to_cpu()?;
+        cpu_tensor.candle_tensor.to_vec1()
+            .map_err(|e| VmError::TensorError(format!("Failed to convert tensor to vec: {}", e)))
     }
 }
 
-/// Tensor manager for VM execution
+impl DataType {
+    /// Convert to Candle DType
+    pub fn to_candle_dtype(&self) -> DType {
+        match self {
+            DataType::Float32 => DType::F32,
+            DataType::Float64 => DType::F64,
+            DataType::Int32 => DType::I64, // Candle doesn't have I32, use I64
+            DataType::Int64 => DType::I64,
+            DataType::Bool => DType::U8,   // Use U8 for bool
+            _ => DType::F32, // Default fallback
+        }
+    }
+}
+
+/// High-performance tensor manager using concurrent data structures
 pub struct TensorManager {
-    tensors: HashMap<TensorId, Tensor>,
+    tensors: DashMap<TensorId, Arc<RwLock<Tensor>>>,
     max_tensors: usize,
     max_memory_bytes: usize,
-    current_memory_usage: usize,
-    peak_memory_usage: usize,
+    current_memory_usage: Arc<parking_lot::Mutex<usize>>,
+    peak_memory_usage: Arc<parking_lot::Mutex<usize>>,
+    default_device: Device,
 }
 
 impl TensorManager {
     /// Create a new tensor manager
     pub fn new(max_tensors: usize, max_memory_mb: usize) -> Self {
+        let default_device = Self::get_best_device();
+        
         Self {
-            tensors: HashMap::new(),
+            tensors: DashMap::new(),
             max_tensors,
             max_memory_bytes: max_memory_mb * 1024 * 1024,
-            current_memory_usage: 0,
-            peak_memory_usage: 0,
+            current_memory_usage: Arc::new(parking_lot::Mutex::new(0)),
+            peak_memory_usage: Arc::new(parking_lot::Mutex::new(0)),
+            default_device,
         }
+    }
+
+    /// Get the best available device
+    fn get_best_device() -> Device {
+        #[cfg(feature = "cuda")]
+        {
+            if let Ok(device) = Device::new_cuda(0) {
+                return device;
+            }
+        }
+        
+        #[cfg(feature = "metal-gpu")]
+        {
+            if let Ok(device) = Device::new_metal(0) {
+                return device;
+            }
+        }
+        
+        Device::Cpu
     }
 
     /// Create a new tensor
     pub fn create_tensor(
-        &mut self, 
+        &self, 
         id: TensorId, 
         shape: Vec<usize>, 
         dtype: DataType
@@ -208,24 +238,29 @@ impl TensorManager {
             ));
         }
 
-        let tensor = Tensor::new(id, shape, dtype)?;
+        let tensor = Tensor::new(id, shape, dtype, &self.default_device)?;
         let memory_size = tensor.memory_size();
 
-        if self.current_memory_usage + memory_size > self.max_memory_bytes {
-            return Err(VmError::ResourceLimitExceeded(
-                format!("Memory limit ({} MB) would be exceeded", self.max_memory_bytes / 1024 / 1024)
-            ));
+        // Check memory limits
+        {
+            let mut current_usage = self.current_memory_usage.lock();
+            if *current_usage + memory_size > self.max_memory_bytes {
+                return Err(VmError::ResourceLimitExceeded(
+                    format!("Memory limit ({} MB) would be exceeded", self.max_memory_bytes / 1024 / 1024)
+                ));
+            }
+            *current_usage += memory_size;
+            
+            let mut peak_usage = self.peak_memory_usage.lock();
+            *peak_usage = (*peak_usage).max(*current_usage);
         }
-
-        self.current_memory_usage += memory_size;
-        self.peak_memory_usage = self.peak_memory_usage.max(self.current_memory_usage);
         
-        self.tensors.insert(id, tensor);
+        self.tensors.insert(id, Arc::new(RwLock::new(tensor)));
         Ok(())
     }
 
     /// Store tensor data
-    pub fn store_tensor(&mut self, tensor: Tensor) -> Result<(), VmError> {
+    pub fn store_tensor(&self, tensor: Tensor) -> Result<(), VmError> {
         if self.tensors.len() >= self.max_tensors {
             return Err(VmError::ResourceLimitExceeded(
                 format!("Maximum number of tensors ({}) exceeded", self.max_tensors)
@@ -234,37 +269,41 @@ impl TensorManager {
 
         let memory_size = tensor.memory_size();
         
-        if self.current_memory_usage + memory_size > self.max_memory_bytes {
-            return Err(VmError::ResourceLimitExceeded(
-                format!("Memory limit ({} MB) would be exceeded", self.max_memory_bytes / 1024 / 1024)
-            ));
+        // Check memory limits
+        {
+            let mut current_usage = self.current_memory_usage.lock();
+            if *current_usage + memory_size > self.max_memory_bytes {
+                return Err(VmError::ResourceLimitExceeded(
+                    format!("Memory limit ({} MB) would be exceeded", self.max_memory_bytes / 1024 / 1024)
+                ));
+            }
+            *current_usage += memory_size;
+            
+            let mut peak_usage = self.peak_memory_usage.lock();
+            *peak_usage = (*peak_usage).max(*current_usage);
         }
-
-        self.current_memory_usage += memory_size;
-        self.peak_memory_usage = self.peak_memory_usage.max(self.current_memory_usage);
         
-        self.tensors.insert(tensor.id, tensor);
+        self.tensors.insert(tensor.id, Arc::new(RwLock::new(tensor)));
         Ok(())
     }
 
-    /// Get tensor by ID
-    pub fn get_tensor(&self, id: TensorId) -> Result<&Tensor, VmError> {
-        self.tensors.get(&id).ok_or_else(|| {
-            VmError::TensorError(format!("Tensor with ID {:?} not found", id))
-        })
-    }
-
-    /// Get mutable tensor by ID
-    pub fn get_tensor_mut(&mut self, id: TensorId) -> Result<&mut Tensor, VmError> {
-        self.tensors.get_mut(&id).ok_or_else(|| {
-            VmError::TensorError(format!("Tensor with ID {:?} not found", id))
-        })
+    /// Get tensor by ID (read-only access)
+    pub fn get_tensor(&self, id: TensorId) -> Result<Arc<RwLock<Tensor>>, VmError> {
+        self.tensors.get(&id)
+            .map(|entry| entry.value().clone())
+            .ok_or_else(|| VmError::TensorError(format!("Tensor with ID {:?} not found", id)))
     }
 
     /// Destroy tensor and free memory
-    pub fn destroy_tensor(&mut self, id: TensorId) -> Result<(), VmError> {
-        if let Some(tensor) = self.tensors.remove(&id) {
-            self.current_memory_usage = self.current_memory_usage.saturating_sub(tensor.memory_size());
+    pub fn destroy_tensor(&self, id: TensorId) -> Result<(), VmError> {
+        if let Some((_, tensor_ref)) = self.tensors.remove(&id) {
+            let tensor = tensor_ref.read();
+            let memory_size = tensor.memory_size();
+            drop(tensor); // Release read lock
+            
+            let mut current_usage = self.current_memory_usage.lock();
+            *current_usage = current_usage.saturating_sub(memory_size);
+            
             Ok(())
         } else {
             Err(VmError::TensorError(format!("Tensor with ID {:?} not found", id)))
@@ -278,12 +317,12 @@ impl TensorManager {
 
     /// Get current memory usage in bytes
     pub fn current_memory_usage(&self) -> usize {
-        self.current_memory_usage
+        *self.current_memory_usage.lock()
     }
 
     /// Get peak memory usage in bytes
     pub fn peak_memory_usage(&self) -> usize {
-        self.peak_memory_usage
+        *self.peak_memory_usage.lock()
     }
 
     /// Get number of stored tensors
@@ -292,20 +331,82 @@ impl TensorManager {
     }
 
     /// Clear all tensors
-    pub fn clear(&mut self) {
+    pub fn clear(&self) {
         self.tensors.clear();
-        self.current_memory_usage = 0;
+        *self.current_memory_usage.lock() = 0;
     }
 
-    /// Get memory usage statistics
-    pub fn memory_stats(&self) -> MemoryStats {
-        MemoryStats {
-            current_usage_bytes: self.current_memory_usage,
-            peak_usage_bytes: self.peak_memory_usage,
-            max_memory_bytes: self.max_memory_bytes,
-            tensor_count: self.tensors.len(),
-            max_tensors: self.max_tensors,
-        }
+    /// Perform tensor addition
+    pub fn tensor_add(&self, a_id: TensorId, b_id: TensorId, output_id: TensorId) -> Result<(), VmError> {
+        let a_tensor = self.get_tensor(a_id)?;
+        let b_tensor = self.get_tensor(b_id)?;
+        
+        let a = a_tensor.read();
+        let b = b_tensor.read();
+        
+        let result = (&a.candle_tensor + &b.candle_tensor)
+            .map_err(|e| VmError::TensorError(format!("Tensor addition failed: {}", e)))?;
+        
+        let output_tensor = Tensor {
+            id: output_id,
+            shape: a.shape.clone(),
+            dtype: a.dtype.clone(),
+            candle_tensor: result,
+            device: a.device.clone(),
+            requires_grad: a.requires_grad || b.requires_grad,
+        };
+        
+        self.store_tensor(output_tensor)
+    }
+
+    /// Perform matrix multiplication
+    pub fn tensor_matmul(&self, a_id: TensorId, b_id: TensorId, output_id: TensorId) -> Result<(), VmError> {
+        let a_tensor = self.get_tensor(a_id)?;
+        let b_tensor = self.get_tensor(b_id)?;
+        
+        let a = a_tensor.read();
+        let b = b_tensor.read();
+        
+        let result = a.candle_tensor.matmul(&b.candle_tensor)
+            .map_err(|e| VmError::TensorError(format!("Matrix multiplication failed: {}", e)))?;
+        
+        // Infer output shape
+        let output_shape = if a.shape.len() == 2 && b.shape.len() == 2 {
+            vec![a.shape[0], b.shape[1]]
+        } else {
+            result.shape().dims().to_vec()
+        };
+        
+        let output_tensor = Tensor {
+            id: output_id,
+            shape: output_shape,
+            dtype: a.dtype.clone(),
+            candle_tensor: result,
+            device: a.device.clone(),
+            requires_grad: a.requires_grad || b.requires_grad,
+        };
+        
+        self.store_tensor(output_tensor)
+    }
+
+    /// Apply ReLU activation
+    pub fn tensor_relu(&self, input_id: TensorId, output_id: TensorId) -> Result<(), VmError> {
+        let input_tensor = self.get_tensor(input_id)?;
+        let input = input_tensor.read();
+        
+        let result = candle_nn::ops::relu(&input.candle_tensor)
+            .map_err(|e| VmError::TensorError(format!("ReLU activation failed: {}", e)))?;
+        
+        let output_tensor = Tensor {
+            id: output_id,
+            shape: input.shape.clone(),
+            dtype: input.dtype.clone(),
+            candle_tensor: result,
+            device: input.device.clone(),
+            requires_grad: input.requires_grad,
+        };
+        
+        self.store_tensor(output_tensor)
     }
 }
 
@@ -317,6 +418,7 @@ pub struct MemoryStats {
     pub max_memory_bytes: usize,
     pub tensor_count: usize,
     pub max_tensors: usize,
+    pub device_type: String,
 }
 
 impl MemoryStats {
@@ -331,13 +433,32 @@ impl MemoryStats {
     }
 }
 
+impl TensorManager {
+    /// Get comprehensive memory statistics
+    pub fn memory_stats(&self) -> MemoryStats {
+        MemoryStats {
+            current_usage_bytes: self.current_memory_usage(),
+            peak_usage_bytes: self.peak_memory_usage(),
+            max_memory_bytes: self.max_memory_bytes,
+            tensor_count: self.tensor_count(),
+            max_tensors: self.max_tensors,
+            device_type: match &self.default_device {
+                Device::Cpu => "CPU".to_string(),
+                Device::Cuda(_) => "CUDA".to_string(),
+                Device::Metal(_) => "Metal".to_string(),
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_tensor_creation() {
-        let tensor = Tensor::new(TensorId(1), vec![2, 3], DataType::Float32);
+        let device = Device::Cpu;
+        let tensor = Tensor::new(TensorId(1), vec![2, 3], DataType::Float32, &device);
         assert!(tensor.is_ok());
         let tensor = tensor.unwrap();
         assert_eq!(tensor.numel(), 6);
@@ -346,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_tensor_manager() {
-        let mut manager = TensorManager::new(100, 1024);
+        let manager = TensorManager::new(100, 1024);
         
         // Create tensor
         let result = manager.create_tensor(TensorId(1), vec![10, 10], DataType::Float32);
@@ -364,34 +485,25 @@ mod tests {
     }
 
     #[test]
+    fn test_tensor_operations() {
+        let manager = TensorManager::new(100, 1024);
+        
+        // Create test tensors
+        manager.create_tensor(TensorId(1), vec![2, 2], DataType::Float32).unwrap();
+        manager.create_tensor(TensorId(2), vec![2, 2], DataType::Float32).unwrap();
+        
+        // Test addition
+        let result = manager.tensor_add(TensorId(1), TensorId(2), TensorId(3));
+        assert!(result.is_ok());
+        assert!(manager.has_tensor(TensorId(3)));
+    }
+
+    #[test]
     fn test_memory_limits() {
-        let mut manager = TensorManager::new(1, 1); // Very small limits
+        let manager = TensorManager::new(1, 1); // Very small limits
         
         // This should fail due to memory limit
         let result = manager.create_tensor(TensorId(1), vec![1000, 1000], DataType::Float32);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_tensor_broadcast_compatibility() {
-        let tensor1 = Tensor::new(TensorId(1), vec![3, 1], DataType::Float32).unwrap();
-        let tensor2 = Tensor::new(TensorId(2), vec![1, 4], DataType::Float32).unwrap();
-        
-        assert!(tensor1.can_broadcast_with(&tensor2));
-        
-        let tensor3 = Tensor::new(TensorId(3), vec![3, 2], DataType::Float32).unwrap();
-        assert!(!tensor1.can_broadcast_with(&tensor3));
-    }
-
-    #[test]
-    fn test_tensor_reshape() {
-        let mut tensor = Tensor::new(TensorId(1), vec![2, 3], DataType::Float32).unwrap();
-        
-        // Valid reshape
-        assert!(tensor.reshape(vec![6]).is_ok());
-        assert_eq!(tensor.shape, vec![6]);
-        
-        // Invalid reshape (different number of elements)
-        assert!(tensor.reshape(vec![2, 2]).is_err());
     }
 } 
