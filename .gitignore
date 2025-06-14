@@ -1,11 +1,83 @@
-/devnet/target
-/devnet/ledger.json
-/jobmanager/target
-/runtime/target
-/jobmanager/jobs.json
+# Rust build artifacts
+/target/
+target/
+**/target/
+Cargo.lock
+
+# Individual workspace Cargo.lock files (keep workspace root Cargo.lock)
+/devnet/Cargo.lock
+/jobmanager/Cargo.lock
 /runtime/Cargo.lock
-/p2p/target
 /p2p/Cargo.lock
-/keygen/target
-/dashboard/target
+/keygen/Cargo.lock
 /dashboard/Cargo.lock
+
+# Application data files
+ledger.json
+/devnet/ledger.json
+/jobmanager/jobs.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS generated files
+Thumbs.db
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Build outputs and binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# Runtime generated files
+*.pid
+*.seed
+*.pid.lock
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node modules (if any JS tooling)
+node_modules/
+
+# Python artifacts (if any Python tooling)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Docker artifacts
+.dockerignore
+
+# Kubernetes secrets
+k8s/*-secret.yaml
+k8s/secrets/
+
+# Blockchain data directories (runtime data)
+blockchain_data/
+chain_data/
+validator_data/
+
+# Performance and profiling data
+*.prof
+perf.data*
+flamegraph.svg
