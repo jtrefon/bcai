@@ -8,19 +8,20 @@ name = "blockchain"
 path = "src/bin/blockchain.rs"
 
 [dependencies]
-thiserror = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 wgpu = "25"
 pollster = "0.3"
 bytemuck = { version = "1.14", features = ["derive"] }
 rand = "0.8"
 sha2 = "0.10"
-smartcore = { version = "0.4", default-features = false, features = ["datasets"] }
-rayon = "1"
+smartcore = "0.3.0"
+rayon = "1.7"
 chrono = { version = "0.4.41", features = ["serde"] }
 clap = { version = "4.0", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.0", features = ["full"] }
+num-complex = "0.4"
 
 [dev-dependencies]
 keygen_lib = { package = "keygen", path = "../keygen" }

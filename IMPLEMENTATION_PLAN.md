@@ -43,141 +43,116 @@ This document breaks down roadmap milestones into actionable tasks for developme
   - No real ML framework integration
   - Missing workload partitioning and optimization
 
-## Phase 1: Foundation Repair & Core Functionality (Q1 2025)
+## Phase 1: Foundation Repair & Enhanced VM Architecture (Q1 2025)
 
-### Priority 1A: Code Quality & Testing
-- [ ] **Add comprehensive unit tests to runtime/src/lib.rs** 
-  - Test all VM instruction implementations
-  - Test error conditions and edge cases
-  - Achieve actual 100% test coverage per coding standards
-- [ ] **Standardize error handling across all modules**
-  - Create unified error types using thiserror
-  - Implement proper error propagation
-  - Add input validation to all public APIs
-- [ ] **Add rustdoc documentation to all public functions**
-  - Document complex algorithms (PoUW, matrix operations)
-  - Add usage examples for key APIs
-  - Generate and review documentation completeness
-
-### Priority 1A-Extended: Specific Code Quality Issues
-- [ ] **Fix hardcoded values and magic numbers**
-  - Replace hardcoded difficulty calculation constants with configurable parameters
-  - Add configuration system for network parameters
-  - Create environment-specific parameter sets (dev/test/prod)
-- [ ] **Address inconsistent error handling patterns**
-  - Some modules use proper `Result` types while others don't
-  - Standardize error propagation across all public APIs
-  - Add proper error context and debugging information
-- [ ] **Fix missing Default implementations and edge cases**
-  - Add proper bounds checking in VM memory operations
-  - Handle integer overflow in matrix operations
-  - Add graceful degradation for resource exhaustion
-
-### Priority 1B: Security Hardening
-- [ ] **Fix PoUW verification vulnerabilities**
-  - Add protection against pre-computed result submission
-  - Implement robust difficulty adjustment mechanism
-  - Add cryptographic proof of work computation
-- [ ] **Implement input sanitization and validation**
-  - Validate all user inputs in CLI and P2P interfaces
-  - Add bounds checking for VM memory operations
-  - Protect against malicious job submissions
-- [ ] **Add comprehensive integration tests**
-  - Test component interactions under adverse conditions
-  - Simulate Byzantine behavior in P2P layer
-  - Test resource exhaustion scenarios
-
-### Priority 1B-Extended: Specific Security Issues Found
-- [ ] **Fix PoUW meets_difficulty function vulnerability**
+### Priority 1A: Enhanced ML-First VM Architecture 🚀
+- [ ] **Implement Multi-Tier VM Execution System**
+  - Create hybrid VM with Native ML Instructions, Python Bridge, and Custom DSL support
+  - Add tensor operations and neural network primitives to instruction set
+  - Implement hardware abstraction layer for CPU/GPU/Metal backends
+- [ ] **Python Integration & Sandboxing**
+  - Integrate PyO3 for safe Python code execution in distributed environment
+  - Add restricted Python runtime with ML library support (PyTorch, NumPy, Transformers)
+  - Implement resource monitoring and security constraints for Python execution
+- [ ] **Native ML Instruction Set**
   ```rust
-  // Current implementation only checks first 4 bytes - easily gameable
-  fn meets_difficulty(hash: &[u8; 32], difficulty: u32) -> bool {
-      let value = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
-      value <= difficulty
+  // Extended instruction set beyond basic arithmetic
+  pub enum MLInstruction {
+    // Tensor Operations
+    TensorCreate { shape: Vec<usize>, dtype: DataType },
+    TensorOp { op: TensorOperation, inputs: Vec<TensorId> },
+    // Neural Network Primitives  
+    Linear { in_features: usize, out_features: usize },
+    Conv2D { in_channels: usize, out_channels: usize, kernel: (usize, usize) },
+    LSTM { input_size: usize, hidden_size: usize, num_layers: usize },
+    Attention { embed_dim: usize, num_heads: usize },
+    // Hardware Operations
+    ToGPU { tensor_id: TensorId }, ToCPU { tensor_id: TensorId },
   }
   ```
-  - Implement proper difficulty calculation using full hash
-  - Add time-lock puzzles to prevent precomputation
-  - Add randomness to prevent result prediction
-- [ ] **Address missing slashing mechanisms**
-  - Documentation promises slashing but no implementation exists
-  - Add proper stake locking and penalty distribution
-  - Implement Byzantine fault detection and punishment
-- [ ] **Fix P2P training simulation vulnerability**
-  ```rust
-  // Current "training" is trivial and fakeable
-  fn train_lr(data: &[u8]) -> Vec<f32> {
-      data.iter().map(|&x| x as f32 * 2.0 + 1.0).collect()
-  }
-  ```
-  - Replace with verifiable computation
-  - Add proof of actual training work
-  - Implement training result validation
+- [ ] **Developer-Friendly APIs**
+  - Create Python SDK for job submission with familiar ML workflow
+  - Add YAML-based job configuration (BML - BCAI ML Language)
+  - Build Rust native API for performance-critical applications
 
-### Priority 1C: Component Integration
-- [ ] **Create unified runtime architecture**
-  - Integrate VM with job execution pipeline
-  - Connect P2P layer with job manager
-  - Implement proper state management across components
-- [ ] **Enhance VM capabilities for AI workloads**
-  ```rust
-  // Extend instruction set beyond basic arithmetic
-  pub enum Instruction {
-    // ... existing instructions
-    MatMul(MatrixOp),     // Matrix operations
-    VectorOp(VectorOp),   // Vector operations  
-    MemCopy(usize, usize), // Efficient memory operations
-    Checkpoint(String),    // Training checkpoints
-  }
-  ```
-- [ ] **Implement persistent state management**
-  - Replace file-based storage with proper database
-  - Add transaction logging for job operations
-  - Implement state recovery mechanisms
+### Priority 1A-Extended: Hardware Abstraction & Performance
+- [ ] **Multi-Backend Hardware Support**
+  - CUDA backend for NVIDIA GPUs with memory management and kernel execution
+  - Metal backend for Apple Silicon optimization  
+  - CPU backend with SIMD optimizations and multi-threading
+  - Automatic backend selection based on available hardware
+- [ ] **Tensor Memory Management**
+  - Implement efficient tensor storage with reference counting
+  - Add memory pooling for GPU allocations
+  - Create automatic memory transfer between CPU/GPU
+- [ ] **Performance Optimization**
+  - JIT compilation for frequently used ML operations
+  - Kernel fusion for reducing memory bandwidth bottlenecks
+  - Asynchronous execution with CUDA streams / Metal command buffers
 
-## Phase 2: Distributed Training Foundation (Q2 2025)
+### Priority 1B: Security & Distributed Execution
+- [ ] **Python Sandbox Security**
+  - Implement restricted import system allowing only approved ML libraries
+  - Add syscall filtering to prevent unauthorized file/network access  
+  - Resource limiting (memory, compute time, GPU usage) per job execution
+  - Code signature verification for reproducible training results
+- [ ] **Distributed VM Coordination**
+  - Integrate enhanced VM with existing P2P networking for job distribution
+  - Add federated learning aggregation directly in VM execution layer
+  - Implement model parameter synchronization across distributed workers
+  - Create checkpoint/resume system for long-running distributed training
 
-### Priority 2A: Real Distributed Coordination
-- [ ] **Implement gradient synchronization protocol**
-  - Add parameter server architecture
-  - Implement all-reduce communication patterns
-  - Add support for asynchronous updates
-- [ ] **Create robust worker coordination**
-  - Implement worker discovery and capability matching
-  - Add heartbeat and failure detection
-  - Create work redistribution mechanisms
-- [ ] **Add training checkpoint system**
-  - Implement distributed checkpointing
-  - Add recovery from partial failures
-  - Create training progress verification
+### Priority 1C: Integration with Existing Components
+- [ ] **Connect Enhanced VM with Job Manager**
+  - Update JobManager to support new ML instruction submission format
+  - Add support for Python code jobs alongside native instruction jobs
+  - Integrate VM execution results with blockchain state management
+- [ ] **Blockchain Integration for ML Operations**  
+  - Store model hashes and training metadata on-chain for verification
+  - Add proof-of-training validation using VM execution traces
+  - Connect token payments with actual ML work performed by enhanced VM
+- [ ] **Update Testing Infrastructure**
+  - Add comprehensive unit tests for new ML instruction set
+  - Create integration tests for Python bridge security and functionality  
+  - Add performance benchmarks comparing native vs Python execution paths
 
-### Priority 2B: Economic Layer Implementation
-- [ ] **Integrate token mechanics with job execution**
-  - Connect staking requirements to job participation
-  - Implement automatic payment distribution
-  - Add escrow mechanisms for job completion
-- [ ] **Create reputation system with persistent storage**
-  - Track node performance and reliability
-  - Implement slashing for misbehavior
-  - Add reputation-based job matching
-- [ ] **Implement fee market mechanics**
-  - Dynamic pricing based on supply/demand
-  - Fee estimation for different job types
-  - Economic incentive alignment verification
+## Phase 2: Advanced ML Capabilities & Production Features (Q2 2025)
 
-### Priority 2C: Enhanced AI Capabilities
-- [ ] **Implement realistic AI training tasks**
-  - Replace trivial matrix multiplication with actual neural network training
-  - Add support for common frameworks (PyTorch state dict compatibility)
-  - Implement federated learning protocols
-- [ ] **Add distributed data management**
-  - Implement secure data distribution
-  - Add data validation and integrity checks
-  - Create privacy-preserving training options
-- [ ] **GPU optimization and abstraction**
-  - Optimize WGPU usage for real ML workloads
-  - Add support for different GPU architectures
-  - Implement workload partitioning across devices
+### Priority 2A: Advanced ML Framework Support
+- [ ] **Complete ML Ecosystem Integration**
+  - Full PyTorch integration with model loading, training, and inference
+  - JAX/Flax support for high-performance research workflows
+  - Transformers library integration for modern NLP/multimodal models
+  - Automatic model conversion between frameworks
+- [ ] **Custom DSL Implementation (BML - BCAI ML Language)**
+  - YAML-based declarative training job specification
+  - Support for common architectures (Transformer, CNN, LSTM) with simple config
+  - Automatic hyperparameter optimization and neural architecture search
+  - Template system for popular model types (BERT, GPT, ResNet, etc.)
+
+### Priority 2B: Distributed ML Coordination  
+- [ ] **Advanced Federated Learning**
+  - FedAvg, FedProx, and other state-of-the-art aggregation algorithms
+  - Privacy-preserving techniques (differential privacy, secure aggregation)
+  - Heterogeneous federated learning for different model architectures
+  - Client selection and contribution weighting strategies
+- [ ] **Large-Scale Distributed Training**
+  - Data parallelism with gradient synchronization across nodes
+  - Model parallelism for training large models that don't fit on single GPU
+  - Pipeline parallelism for transformer-style models
+  - Dynamic load balancing and fault tolerance
+
+### Priority 2C: Developer Experience & Tooling
+- [ ] **Comprehensive SDK & Tooling**
+  - Python SDK with Jupyter notebook integration
+  - Web-based model training dashboard and experiment tracking
+  - CLI tools for job submission, monitoring, and model management  
+  - Integration with popular ML tools (Weights & Biases, TensorBoard, MLflow)
+- [ ] **Model Registry & Versioning**
+  - Decentralized model registry with IPFS storage
+  - Model versioning, lineage tracking, and reproducibility guarantees
+  - A/B testing framework for model comparison
+  - Automated model deployment and serving capabilities
 
 ## Phase 3: Blockchain Integration (Q3 2025)
 

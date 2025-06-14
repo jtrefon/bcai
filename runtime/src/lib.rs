@@ -18,6 +18,13 @@ pub mod smart_contracts;
 pub mod token;
 pub mod trainer;
 
+// New enhanced VM modules
+pub mod enhanced_vm;
+pub mod tensor_ops;
+pub mod hardware_abstraction;
+pub mod python_bridge;
+pub mod ml_instructions;
+
 pub use blockchain::{Block, Blockchain, BlockchainError, BlockchainStats, Transaction};
 pub use consensus_node::{ConsensusConfig, ConsensusError, ConsensusNode, MiningStats};
 pub use evaluator::*;
@@ -35,6 +42,13 @@ pub use security::*;
 pub use smart_contracts::*;
 pub use token::*;
 pub use trainer::*;
+
+// Export enhanced VM components
+pub use enhanced_vm::*;
+pub use tensor_ops::*;
+pub use hardware_abstraction::*;
+pub use python_bridge::*;
+pub use ml_instructions::*;
 
 /// Errors that can occur during VM execution.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -54,6 +68,228 @@ pub enum VmError {
     /// Stack overflow (too many values).
     #[error("stack overflow: maximum size {0} exceeded")]
     StackOverflow(usize),
+    /// Enhanced VM specific errors
+    #[error("tensor operation failed: {0}")]
+    TensorError(String),
+    /// Python execution errors
+    #[error("python execution failed: {0}")]
+    PythonError(String),
+    /// Hardware backend errors
+    #[error("hardware error: {0}")]
+    HardwareError(String),
+    /// ML instruction errors
+    #[error("ML instruction error: {0}")]
+    MLInstructionError(String),
+    /// Resource limit exceeded
+    #[error("resource limit exceeded: {0}")]
+    ResourceLimitExceeded(String),
+}
+
+/// Data types supported by the enhanced VM
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataType {
+    Float32,
+    Float64,
+    Int32,
+    Int64,
+    Bool,
+    Complex64,
+    Complex128,
+}
+
+impl DataType {
+    pub fn size_bytes(&self) -> usize {
+        match self {
+            DataType::Float32 | DataType::Int32 => 4,
+            DataType::Float64 | DataType::Int64 => 8,
+            DataType::Bool => 1,
+            DataType::Complex64 => 8,
+            DataType::Complex128 => 16,
+        }
+    }
+}
+
+/// Tensor identifier for referencing tensors in VM
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TensorId(pub u64);
+
+/// Enhanced ML instructions for the VM
+#[derive(Clone, Debug, PartialEq)]
+pub enum MLInstruction {
+    // Legacy basic instructions
+    Push(i64),
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Dup,
+    Swap,
+    Store(usize),
+    Load(usize),
+    Halt,
+    
+    // Tensor Operations
+    TensorCreate { shape: Vec<usize>, dtype: DataType, id: TensorId },
+    TensorOp { op: TensorOperation, inputs: Vec<TensorId>, output: TensorId },
+    TensorDestroy { id: TensorId },
+    
+    // Neural Network Primitives
+    Linear { 
+        in_features: usize, 
+        out_features: usize,
+        weight_id: TensorId,
+        bias_id: Option<TensorId>,
+        input_id: TensorId,
+        output_id: TensorId,
+    },
+    Conv2D { 
+        in_channels: usize, 
+        out_channels: usize, 
+        kernel_size: (usize, usize),
+        stride: (usize, usize),
+        padding: (usize, usize),
+        weight_id: TensorId,
+        bias_id: Option<TensorId>,
+        input_id: TensorId,
+        output_id: TensorId,
+    },
+    LSTM { 
+        input_size: usize, 
+        hidden_size: usize, 
+        num_layers: usize,
+        input_id: TensorId,
+        hidden_id: TensorId,
+        cell_id: TensorId,
+        output_id: TensorId,
+    },
+    Attention { 
+        embed_dim: usize, 
+        num_heads: usize,
+        query_id: TensorId,
+        key_id: TensorId,
+        value_id: TensorId,
+        output_id: TensorId,
+    },
+    
+    // Activation Functions
+    Activation { 
+        function: ActivationFunction, 
+        input_id: TensorId, 
+        output_id: TensorId 
+    },
+    
+    // Optimizers
+    SGDStep {
+        param_id: TensorId,
+        grad_id: TensorId,
+        lr: f32,
+        momentum: f32,
+    },
+    AdamStep {
+        param_id: TensorId,
+        grad_id: TensorId,
+        moment1_id: TensorId,
+        moment2_id: TensorId,
+        lr: f32,
+        beta1: f32,
+        beta2: f32,
+        epsilon: f32,
+    },
+    
+    // Hardware Operations
+    ToGPU { tensor_id: TensorId },
+    ToCPU { tensor_id: TensorId },
+    Synchronize,
+    
+    // Python Bridge
+    PythonExecute {
+        code: String,
+        input_tensors: Vec<(String, TensorId)>,
+        output_tensors: Vec<(String, TensorId)>,
+        constraints: PythonConstraints,
+    },
+}
+
+/// Tensor operations supported by the VM
+#[derive(Debug, Clone, PartialEq)]
+pub enum TensorOperation {
+    // Element-wise operations
+    Add, Sub, Mul, Div, Pow,
+    Sqrt, Exp, Log, Sin, Cos,
+    ReLU, Sigmoid, Tanh, GELU,
+    
+    // Reduction operations
+    Sum { dims: Option<Vec<usize>>, keep_dims: bool },
+    Mean { dims: Option<Vec<usize>>, keep_dims: bool },
+    Max { dims: Option<Vec<usize>>, keep_dims: bool },
+    Min { dims: Option<Vec<usize>>, keep_dims: bool },
+    
+    // Linear algebra
+    MatMul,
+    BatchMatMul,
+    Transpose { dims: (usize, usize) },
+    
+    // Shape operations
+    Reshape { new_shape: Vec<usize> },
+    Permute { dims: Vec<usize> },
+    Slice { start: Vec<usize>, end: Vec<usize> },
+    Concatenate { axis: usize },
+    
+    // Normalization
+    LayerNorm { normalized_shape: Vec<usize>, eps: f32 },
+    BatchNorm { num_features: usize, eps: f32, momentum: f32 },
+    
+    // Pooling
+    MaxPool2D { kernel_size: (usize, usize), stride: (usize, usize) },
+    AvgPool2D { kernel_size: (usize, usize), stride: (usize, usize) },
+}
+
+/// Activation functions for neural networks
+#[derive(Debug, Clone, PartialEq)]
+pub enum ActivationFunction {
+    ReLU,
+    Sigmoid,
+    Tanh,
+    GELU,
+    Swish,
+    Mish,
+    LeakyReLU { negative_slope: f32 },
+    ELU { alpha: f32 },
+    Softmax { dim: usize },
+    LogSoftmax { dim: usize },
+}
+
+/// Constraints for Python code execution
+#[derive(Debug, Clone, PartialEq)]
+pub struct PythonConstraints {
+    pub max_memory_mb: usize,
+    pub max_execution_time_ms: u64,
+    pub max_gpu_memory_mb: usize,
+    pub allowed_imports: Vec<String>,
+    pub enable_networking: bool,
+    pub enable_file_access: bool,
+}
+
+impl Default for PythonConstraints {
+    fn default() -> Self {
+        Self {
+            max_memory_mb: 2048,
+            max_execution_time_ms: 30000,
+            max_gpu_memory_mb: 4096,
+            allowed_imports: vec![
+                "torch".to_string(),
+                "numpy".to_string(),
+                "sklearn".to_string(),
+                "transformers".to_string(),
+                "datasets".to_string(),
+                "jax".to_string(),
+                "flax".to_string(),
+                "optax".to_string(),
+            ],
+            enable_networking: false,
+            enable_file_access: false,
+        }
+    }
 }
 
 /// Simple stack-based instructions.
