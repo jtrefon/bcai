@@ -1,4 +1,5 @@
 use rand::{Rng, SeedableRng, rngs::StdRng};
+use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
 /// A simple matrix multiplication task used for Proof-of-Useful-Work.
@@ -27,14 +28,14 @@ pub fn generate_task(size: usize, seed: u64) -> Task {
 fn multiply(a: &[Vec<u8>], b: &[Vec<u8>]) -> Vec<Vec<u32>> {
     let n = a.len();
     let mut result = vec![vec![0u32; n]; n];
-    for (i, a_row) in a.iter().enumerate() {
+    result.par_iter_mut().enumerate().for_each(|(i, row)| {
         for (k, b_row) in b.iter().enumerate().take(n) {
-            let aik = a_row[k] as u32;
+            let aik = a[i][k] as u32;
             for (j, &bkj) in b_row.iter().enumerate().take(n) {
-                result[i][j] += aik * bkj as u32;
+                row[j] += aik * bkj as u32;
             }
         }
-    }
+    });
     result
 }
 
@@ -64,6 +65,14 @@ pub fn solve(task: &Task, difficulty: u32) -> Solution {
         }
     }
     unreachable!();
+}
+
+/// Solve a task while measuring execution time.
+pub fn solve_profile(task: &Task, difficulty: u32) -> (Solution, std::time::Duration) {
+    let start = std::time::Instant::now();
+    let sol = solve(task, difficulty);
+    let dur = start.elapsed();
+    (sol, dur)
 }
 
 /// Verify that a solution is correct for the given task and difficulty.
