@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main block -->
+  <rect x="4" y="4" width="8" height="8" rx="2" fill="url(#gradient)"/>
+  
+  <!-- Connected blocks -->
+  <rect x="12" y="8" width="8" height="8" rx="2" fill="url(#gradient)" opacity="0.8"/>
+  <rect x="20" y="12" width="8" height="8" rx="2" fill="url(#gradient)" opacity="0.6"/>
+  
+  <!-- Connection lines -->
+  <line x1="12" y1="12" x2="12" y2="12" stroke="url(#gradient)" stroke-width="2"/>
+  <line x1="20" y1="16" x2="20" y2="16" stroke="url(#gradient)" stroke-width="2"/>
+  
+  <!-- AI neural network symbol -->
+  <circle cx="16" cy="24" r="2" fill="url(#gradient)"/>
+  <circle cx="12" cy="26" r="1.5" fill="url(#gradient)" opacity="0.7"/>
+  <circle cx="20" cy="26" r="1.5" fill="url(#gradient)" opacity="0.7"/>
+  
+  <!-- Connection lines for neural network -->
+  <line x1="14" y1="25" x2="16" y2="24" stroke="url(#gradient)" stroke-width="1"/>
+  <line x1="18" y1="25" x2="16" y2="24" stroke="url(#gradient)" stroke-width="1"/>
+</svg> 

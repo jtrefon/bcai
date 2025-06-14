@@ -8,3 +8,4 @@ tiny_http = "0.12"
 devnet = { path = "../devnet" }
 runtime = { path = "../runtime" }
 thiserror = "1"
+clap = { version = "4.0", features = ["derive"] }

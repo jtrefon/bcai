@@ -75,8 +75,8 @@ jobs:
           # Run runtime tests (includes GPU tests)
           cargo test --manifest-path runtime/Cargo.toml --verbose
           
-          # Test that binaries can be built and run basic help
-          cargo run --manifest-path jobmanager/Cargo.toml -- --help
-          cargo run --manifest-path keygen/Cargo.toml -- --help
-          cargo run --manifest-path devnet/Cargo.toml -- --help
-          cargo run --manifest-path dashboard/Cargo.toml -- --help
+          # Test that binaries can be built and run basic help (with timeout)
+          timeout 30s cargo run --manifest-path jobmanager/Cargo.toml -- --help
+          timeout 30s cargo run --manifest-path keygen/Cargo.toml -- --help
+          timeout 30s cargo run --manifest-path devnet/Cargo.toml -- --help
+          timeout 30s cargo run --manifest-path dashboard/Cargo.toml -- --help
