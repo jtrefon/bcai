@@ -48,3 +48,13 @@ fn slashing_and_reputation() -> Result<(), LedgerError> {
     assert_eq!(ledger.reputation("offender"), 2);
     Ok(())
 }
+
+#[test]
+fn burn_tokens() -> Result<(), LedgerError> {
+    let mut ledger = TokenLedger::new();
+    ledger.mint("alice", 50);
+    ledger.burn("alice", 20)?;
+    assert_eq!(ledger.balance("alice"), 30);
+    assert_eq!(ledger.burn("alice", 40).unwrap_err(), LedgerError::InsufficientBalance);
+    Ok(())
+}

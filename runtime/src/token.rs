@@ -52,6 +52,16 @@ impl TokenLedger {
         Ok(())
     }
 
+    /// Permanently remove tokens from an account, reducing total supply.
+    pub fn burn(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        let bal = self.balances.entry(account.to_string()).or_default();
+        if *bal < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        *bal -= amount;
+        Ok(())
+    }
+
     /// Stake tokens from the caller's balance.
     pub fn stake(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
         let bal = self.balances.entry(account.to_string()).or_default();
