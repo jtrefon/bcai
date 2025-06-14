@@ -1,11 +1,11 @@
 use clap::{Parser, Subcommand};
-use runtime::{Vm, VmConfig, Instruction};
+use runtime::{Instruction, Vm, VmConfig};
 
 #[cfg(feature = "enhanced-vm")]
 use runtime::{
     enhanced_vm::{EnhancedVM, VMConfig as EnhancedVMConfig},
-    ml_instructions::MLInstruction,
     hardware_abstraction::HardwareBackend,
+    ml_instructions::MLInstruction,
     python_bridge::PythonBridge,
     tensor_ops::{Tensor, TensorManager},
 };
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("⚠️  Enhanced VM features not compiled in this build.");
         println!("    To enable full testing capabilities, compile with: cargo build --features enhanced-vm");
         println!();
-        
+
         match cli.command {
             Commands::All { .. } => {
                 run_basic_tests().await?;
@@ -154,7 +154,7 @@ async fn run_all_tests(benchmark: bool) -> Result<(), Box<dyn std::error::Error>
 #[cfg(feature = "enhanced-vm")]
 async fn run_instruction_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 Testing VM Instructions...");
-    
+
     let config = VMConfig {
         memory_limit: 512 * 1024 * 1024,
         max_iterations: 1000,
@@ -168,42 +168,24 @@ async fn run_instruction_tests() -> Result<(), Box<dyn std::error::Error>> {
     let mut vm = EnhancedVM::new(config)?;
 
     // Test tensor creation
-    let create_instruction = MLInstruction::TensorCreate {
-        id: 1,
-        shape: vec![2, 2],
-        data: vec![1.0, 2.0, 3.0, 4.0],
-    };
+    let create_instruction =
+        MLInstruction::TensorCreate { id: 1, shape: vec![2, 2], data: vec![1.0, 2.0, 3.0, 4.0] };
     vm.execute_ml_instruction(create_instruction).await?;
 
     // Test tensor addition
-    let create_instruction2 = MLInstruction::TensorCreate {
-        id: 2,
-        shape: vec![2, 2],
-        data: vec![5.0, 6.0, 7.0, 8.0],
-    };
+    let create_instruction2 =
+        MLInstruction::TensorCreate { id: 2, shape: vec![2, 2], data: vec![5.0, 6.0, 7.0, 8.0] };
     vm.execute_ml_instruction(create_instruction2).await?;
 
-    let add_instruction = MLInstruction::TensorAdd {
-        input1: 1,
-        input2: 2,
-        output: 3,
-    };
+    let add_instruction = MLInstruction::TensorAdd { input1: 1, input2: 2, output: 3 };
     vm.execute_ml_instruction(add_instruction).await?;
 
     // Test tensor multiplication
-    let mul_instruction = MLInstruction::TensorMul {
-        input1: 1,
-        input2: 2,
-        output: 4,
-    };
+    let mul_instruction = MLInstruction::TensorMul { input1: 1, input2: 2, output: 4 };
     vm.execute_ml_instruction(mul_instruction).await?;
 
     // Test matrix multiplication
-    let matmul_instruction = MLInstruction::MatMul {
-        input1: 1,
-        input2: 2,
-        output: 5,
-    };
+    let matmul_instruction = MLInstruction::MatMul { input1: 1, input2: 2, output: 5 };
     vm.execute_ml_instruction(matmul_instruction).await?;
 
     println!("  ✓ Tensor creation, addition, multiplication, and matrix multiplication");
@@ -221,9 +203,8 @@ async fn run_tensor_tests() -> Result<(), Box<dyn std::error::Error>> {
     tensor_manager.store_tensor(1, tensor);
 
     // Test tensor retrieval
-    let retrieved = tensor_manager.get_tensor(1)
-        .ok_or("Failed to retrieve tensor")?;
-    
+    let retrieved = tensor_manager.get_tensor(1).ok_or("Failed to retrieve tensor")?;
+
     assert_eq!(retrieved.shape(), &vec![3, 3]);
     assert_eq!(retrieved.data().len(), 9);
 
@@ -234,9 +215,8 @@ async fn run_tensor_tests() -> Result<(), Box<dyn std::error::Error>> {
     let result = tensor_manager.add_tensors(1, 2)?;
     tensor_manager.store_tensor(3, result);
 
-    let result_tensor = tensor_manager.get_tensor(3)
-        .ok_or("Failed to retrieve result tensor")?;
-    
+    let result_tensor = tensor_manager.get_tensor(3).ok_or("Failed to retrieve result tensor")?;
+
     // Verify all values are 3.0 (1.0 + 2.0)
     for &value in result_tensor.data() {
         assert!((value - 3.0).abs() < 1e-6, "Expected 3.0, got {}", value);
@@ -267,8 +247,11 @@ print(f"Sum: {result}")
 result
 "#;
         let result = bridge.execute_code(numpy_code).await?;
-        assert!(result.contains("15") || result.contains("Sum: 15"), 
-                "Expected NumPy sum result, got: {}", result);
+        assert!(
+            result.contains("15") || result.contains("Sum: 15"),
+            "Expected NumPy sum result, got: {}",
+            result
+        );
 
         // Test security restrictions
         let malicious_code = "import os; os.system('echo malicious')";
@@ -302,13 +285,10 @@ async fn run_hardware_tests() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut cpu_vm = EnhancedVM::new(cpu_config)?;
-    
+
     // Test basic operation on CPU
-    let create_instruction = MLInstruction::TensorCreate {
-        id: 1,
-        shape: vec![100, 100],
-        data: vec![1.0; 10000],
-    };
+    let create_instruction =
+        MLInstruction::TensorCreate { id: 1, shape: vec![100, 100], data: vec![1.0; 10000] };
     cpu_vm.execute_ml_instruction(create_instruction).await?;
 
     println!("  ✓ CPU backend operations");
@@ -327,11 +307,13 @@ async fn run_hardware_tests() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let mut cuda_vm = EnhancedVM::new(cuda_config)?;
-        cuda_vm.execute_ml_instruction(MLInstruction::TensorCreate {
-            id: 1,
-            shape: vec![100, 100],
-            data: vec![2.0; 10000],
-        }).await?;
+        cuda_vm
+            .execute_ml_instruction(MLInstruction::TensorCreate {
+                id: 1,
+                shape: vec![100, 100],
+                data: vec![2.0; 10000],
+            })
+            .await?;
 
         println!("  ✓ CUDA backend operations");
     }
@@ -349,11 +331,13 @@ async fn run_hardware_tests() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let mut metal_vm = EnhancedVM::new(metal_config)?;
-        metal_vm.execute_ml_instruction(MLInstruction::TensorCreate {
-            id: 1,
-            shape: vec![100, 100],
-            data: vec![3.0; 10000],
-        }).await?;
+        metal_vm
+            .execute_ml_instruction(MLInstruction::TensorCreate {
+                id: 1,
+                shape: vec![100, 100],
+                data: vec![3.0; 10000],
+            })
+            .await?;
 
         println!("  ✓ Metal backend operations");
     }
@@ -382,19 +366,16 @@ async fn run_benchmarks(iterations: u32, detailed: bool) -> Result<(), Box<dyn s
     // Benchmark tensor creation
     println!("📊 Tensor Creation Benchmark:");
     let start = Instant::now();
-    
+
     for i in 0..iterations {
-        let create_instruction = MLInstruction::TensorCreate {
-            id: i,
-            shape: vec![100, 100],
-            data: vec![1.0; 10000],
-        };
+        let create_instruction =
+            MLInstruction::TensorCreate { id: i, shape: vec![100, 100], data: vec![1.0; 10000] };
         vm.execute_ml_instruction(create_instruction).await?;
     }
-    
+
     let duration = start.elapsed();
     let ops_per_second = iterations as f64 / duration.as_secs_f64();
-    
+
     println!("  ⏱️  Time: {:?}", duration);
     println!("  📈 Tensors/sec: {:.2}", ops_per_second);
     println!("  💾 Memory throughput: {:.2} MB/s", (ops_per_second * 10000.0 * 4.0) / 1e6);
@@ -403,35 +384,35 @@ async fn run_benchmarks(iterations: u32, detailed: bool) -> Result<(), Box<dyn s
         // Benchmark tensor operations
         println!();
         println!("🔥 Tensor Operations Benchmark:");
-        
+
         // Create base tensors for operations
         vm.execute_ml_instruction(MLInstruction::TensorCreate {
             id: 999998,
             shape: vec![1000, 1000],
             data: vec![1.0; 1000000],
-        }).await?;
-        
+        })
+        .await?;
+
         vm.execute_ml_instruction(MLInstruction::TensorCreate {
             id: 999999,
             shape: vec![1000, 1000],
             data: vec![2.0; 1000000],
-        }).await?;
+        })
+        .await?;
 
         let start = Instant::now();
-        
-        for i in 0..100 {  // Smaller iterations for expensive operations
-            let add_instruction = MLInstruction::TensorAdd {
-                input1: 999998,
-                input2: 999999,
-                output: 1000000 + i,
-            };
+
+        for i in 0..100 {
+            // Smaller iterations for expensive operations
+            let add_instruction =
+                MLInstruction::TensorAdd { input1: 999998, input2: 999999, output: 1000000 + i };
             vm.execute_ml_instruction(add_instruction).await?;
         }
-        
+
         let duration = start.elapsed();
         let ops_per_second = 100.0 / duration.as_secs_f64();
         let flops = ops_per_second * 1000000.0; // 1M operations per tensor add
-        
+
         println!("  ⏱️  Time: {:?}", duration);
         println!("  📈 Operations/sec: {:.2}", ops_per_second);
         println!("  🎯 MFLOPS: {:.2}", flops / 1e6);
@@ -439,7 +420,7 @@ async fn run_benchmarks(iterations: u32, detailed: bool) -> Result<(), Box<dyn s
 
     println!();
     println!("✅ Benchmarks completed successfully!");
-    
+
     Ok(())
 }
 
@@ -465,7 +446,7 @@ async fn run_stress_tests(duration_seconds: u64) -> Result<(), Box<dyn std::erro
     let mut tensor_id = 0u32;
 
     println!("🔥 Starting continuous operations...");
-    
+
     while Instant::now() < end_time {
         // Mix of different operations
         match operations % 4 {
@@ -507,8 +488,11 @@ async fn run_stress_tests(duration_seconds: u64) -> Result<(), Box<dyn std::erro
                 // Python execution
                 #[cfg(feature = "enhanced-vm")]
                 {
-                    let python_code = format!("result = {} * 2 + 1; print(f'Operation {}: {{result}}', {})", 
-                                            operations % 100, operations);
+                    let python_code = format!(
+                        "result = {} * 2 + 1; print(f'Operation {}: {{result}}', {})",
+                        operations % 100,
+                        operations
+                    );
                     let _ = vm.execute_python(&python_code).await; // Ignore errors in stress test
                 }
             }
@@ -519,7 +503,8 @@ async fn run_stress_tests(duration_seconds: u64) -> Result<(), Box<dyn std::erro
 
         // Print progress every 1000 operations
         if operations % 1000 == 0 {
-            let elapsed = Instant::now().duration_since(end_time - std::time::Duration::from_secs(duration_seconds));
+            let elapsed = Instant::now()
+                .duration_since(end_time - std::time::Duration::from_secs(duration_seconds));
             let ops_per_second = operations as f64 / elapsed.as_secs_f64();
             println!("  📊 {} operations, {:.2} ops/sec", operations, ops_per_second);
         }
@@ -548,9 +533,7 @@ async fn run_basic_tests() -> Result<(), Box<dyn std::error::Error>> {
     let mut passed = 0;
     let mut failed = 0;
 
-    let test_results = vec![
-        ("Basic VM Instructions", run_basic_instruction_tests().await),
-    ];
+    let test_results = vec![("Basic VM Instructions", run_basic_instruction_tests().await)];
 
     for (name, result) in test_results {
         match result {
@@ -583,21 +566,21 @@ async fn run_basic_tests() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(not(feature = "enhanced-vm"))]
 async fn run_basic_instruction_tests() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 Testing Basic VM Instructions...");
-    
+
     let mut vm = Vm::new();
 
     // Test stack operations
     vm.execute_instruction(Instruction::Push(5.0))?;
     vm.execute_instruction(Instruction::Push(3.0))?;
     vm.execute_instruction(Instruction::Add)?;
-    
+
     if vm.stack().last() != Some(&8.0) {
         return Err("Stack addition test failed".into());
     }
 
     vm.execute_instruction(Instruction::Push(2.0))?;
     vm.execute_instruction(Instruction::Mul)?;
-    
+
     if vm.stack().last() != Some(&16.0) {
         return Err("Stack multiplication test failed".into());
     }
@@ -605,7 +588,7 @@ async fn run_basic_instruction_tests() -> Result<(), Box<dyn std::error::Error>>
     // Test division
     vm.execute_instruction(Instruction::Push(4.0))?;
     vm.execute_instruction(Instruction::Div)?;
-    
+
     if vm.stack().last() != Some(&4.0) {
         return Err("Stack division test failed".into());
     }
@@ -613,7 +596,7 @@ async fn run_basic_instruction_tests() -> Result<(), Box<dyn std::error::Error>>
     // Test memory operations
     vm.execute_instruction(Instruction::Store(0))?;
     vm.execute_instruction(Instruction::Load(0))?;
-    
+
     if vm.stack().last() != Some(&4.0) {
         return Err("Memory store/load test failed".into());
     }
@@ -621,4 +604,4 @@ async fn run_basic_instruction_tests() -> Result<(), Box<dyn std::error::Error>>
     println!("  ✓ Stack operations (push, add, multiply, divide)");
     println!("  ✓ Memory operations (store, load)");
     Ok(())
-} 
+}

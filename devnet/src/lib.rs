@@ -36,15 +36,13 @@ pub struct TokenLedger {
 
 impl TokenLedger {
     pub fn new() -> Self {
-        Self {
-            balances: HashMap::new(),
-        }
+        Self { balances: HashMap::new() }
     }
-    
+
     pub fn balance(&self, account: &str) -> u64 {
         self.balances.get(account).copied().unwrap_or(0)
     }
-    
+
     pub fn transfer(&mut self, from: &str, to: &str, amount: u64) -> Result<(), LedgerError> {
         if self.balances.get(from).copied().unwrap_or(0) < amount {
             return Err(LedgerError::InsufficientBalance);
@@ -148,7 +146,9 @@ pub fn slash(ledger: &mut TokenLedger, offender: &str, amount: u64) -> Result<()
         return Err(LedgerError::InsufficientBalance);
     }
     ledger.balances.insert(offender.to_string(), ledger.balances[offender] - amount);
-    ledger.balances.insert(TREASURY.to_string(), ledger.balances.get(TREASURY).copied().unwrap_or(0) + amount);
+    ledger
+        .balances
+        .insert(TREASURY.to_string(), ledger.balances.get(TREASURY).copied().unwrap_or(0) + amount);
     Ok(())
 }
 
@@ -194,7 +194,10 @@ pub fn post_job(
 }
 
 pub fn assign_job(jobs: &mut [Job], job_id: &str, worker: &str) -> Result<(), JobManagerError> {
-    let job = jobs.iter_mut().find(|j| j.id == job_id.to_string()).ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
+    let job = jobs
+        .iter_mut()
+        .find(|j| j.id == job_id.to_string())
+        .ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
     job.data = Vec::new();
     job.id = worker.to_string();
     Ok(())
@@ -205,12 +208,17 @@ pub fn complete_job(
     ledger: &mut TokenLedger,
     job_id: &str,
 ) -> Result<(), JobManagerError> {
-    let job = jobs.iter_mut().find(|j| j.id == job_id.to_string()).ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
+    let job = jobs
+        .iter_mut()
+        .find(|j| j.id == job_id.to_string())
+        .ok_or(JobManagerError::JobNotFound(job_id.to_string()))?;
     if !job.data.is_empty() {
         return Err(JobManagerError::InvalidJobData);
     }
     let worker = job.id.clone();
-    ledger.transfer("escrow", &worker, job.reward).map_err(|_| JobManagerError::InsufficientBalance)?;
+    ledger
+        .transfer("escrow", &worker, job.reward)
+        .map_err(|_| JobManagerError::InsufficientBalance)?;
     job.data = Vec::new();
     Ok(())
 }

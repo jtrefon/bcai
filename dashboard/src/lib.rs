@@ -6,10 +6,7 @@ use tiny_http::{Response, Server};
 pub fn render_jobs(jobs: &[Job]) -> String {
     let mut html = String::from("<html><body><h1>Jobs</h1><ul>");
     for job in jobs {
-        html.push_str(&format!(
-            "<li>#{} reward:{}</li>",
-            job.id, job.reward
-        ));
+        html.push_str(&format!("<li>#{} reward:{}</li>", job.id, job.reward));
     }
     html.push_str("</ul></body></html>");
     html
@@ -42,11 +39,7 @@ mod tests {
 
     #[test]
     fn html_contains_job_reward() {
-        let jobs = vec![Job {
-            id: "1".into(),
-            data: Vec::new(),
-            reward: 10,
-        }];
+        let jobs = vec![Job { id: "1".into(), data: Vec::new(), reward: 10 }];
         let html = render_jobs(&jobs);
         assert!(html.contains("reward:10"));
     }

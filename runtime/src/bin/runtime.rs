@@ -1,11 +1,11 @@
 use clap::{Parser, Subcommand};
-use runtime::{Vm, VmConfig, Instruction};
+use runtime::{Instruction, Vm, VmConfig};
 
 #[cfg(feature = "enhanced-vm")]
 use runtime::{
     enhanced_vm::{EnhancedVM, VMConfig as EnhancedVMConfig},
-    ml_instructions::MLInstruction,
     hardware_abstraction::HardwareBackend,
+    ml_instructions::MLInstruction,
     python_bridge::PythonBridge,
 };
 
@@ -72,8 +72,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(feature = "enhanced-vm"))]
     {
         println!("⚠️  Enhanced VM features not compiled in this build.");
-        println!("    To enable enhanced features, compile with: cargo build --features enhanced-vm");
-        
+        println!(
+            "    To enable enhanced features, compile with: cargo build --features enhanced-vm"
+        );
+
         match cli.command {
             Commands::Interactive { .. } => {
                 println!("🔧 Starting basic VM interactive mode...");
@@ -93,10 +95,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(feature = "enhanced-vm")]
-async fn run_interactive(python_bridge: bool, gpu_enabled: bool, backend: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_interactive(
+    python_bridge: bool,
+    gpu_enabled: bool,
+    backend: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 BCAI Enhanced VM Runtime - Interactive Mode");
     println!("==============================================");
-    
+
     let backend = match backend {
         "cpu" => HardwareBackend::CPU,
         "cuda" => HardwareBackend::CUDA,
@@ -115,7 +121,7 @@ async fn run_interactive(python_bridge: bool, gpu_enabled: bool, backend: &str) 
     };
 
     let mut vm = EnhancedVM::new(config)?;
-    
+
     if python_bridge {
         let python_bridge = PythonBridge::new(30, 512 * 1024 * 1024)?;
         println!("✅ Python bridge initialized");
@@ -132,7 +138,7 @@ async fn run_interactive(python_bridge: bool, gpu_enabled: bool, backend: &str) 
         print!("vm> ");
         use std::io::{self, Write};
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let input = input.trim();
@@ -151,25 +157,25 @@ async fn run_interactive(python_bridge: bool, gpu_enabled: bool, backend: &str) 
 }
 
 #[cfg(feature = "enhanced-vm")]
-async fn execute_command(vm: &mut EnhancedVM, command: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn execute_command(
+    vm: &mut EnhancedVM,
+    command: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let parts: Vec<&str> = command.split_whitespace().collect();
-    
+
     match parts.get(0) {
         Some(&"tensor_add") => {
             if parts.len() != 4 {
                 return Err("Usage: tensor_add <id1> <id2> <result_id>".into());
             }
-            
+
             let id1: u32 = parts[1].parse()?;
             let id2: u32 = parts[2].parse()?;
             let result_id: u32 = parts[3].parse()?;
-            
-            let instruction = MLInstruction::TensorAdd { 
-                input1: id1, 
-                input2: id2, 
-                output: result_id 
-            };
-            
+
+            let instruction =
+                MLInstruction::TensorAdd { input1: id1, input2: id2, output: result_id };
+
             vm.execute_ml_instruction(instruction).await?;
             Ok(format!("Added tensors {} + {} -> {}", id1, id2, result_id))
         }
@@ -177,17 +183,15 @@ async fn execute_command(vm: &mut EnhancedVM, command: &str) -> Result<String, B
             if parts.len() < 4 {
                 return Err("Usage: tensor_create <id> <shape> <data...>".into());
             }
-            
+
             let id: u32 = parts[1].parse()?;
-            let shape: Vec<usize> = parts[2].split(',').map(|s| s.parse()).collect::<Result<Vec<_>, _>>()?;
-            let data: Vec<f32> = parts[3..].iter().map(|s| s.parse()).collect::<Result<Vec<_>, _>>()?;
-            
-            let instruction = MLInstruction::TensorCreate { 
-                id, 
-                shape, 
-                data 
-            };
-            
+            let shape: Vec<usize> =
+                parts[2].split(',').map(|s| s.parse()).collect::<Result<Vec<_>, _>>()?;
+            let data: Vec<f32> =
+                parts[3..].iter().map(|s| s.parse()).collect::<Result<Vec<_>, _>>()?;
+
+            let instruction = MLInstruction::TensorCreate { id, shape, data };
+
             vm.execute_ml_instruction(instruction).await?;
             Ok(format!("Created tensor {} with shape {:?}", id, shape))
         }
@@ -203,9 +207,13 @@ async fn execute_command(vm: &mut EnhancedVM, command: &str) -> Result<String, B
 }
 
 #[cfg(feature = "enhanced-vm")]
-async fn execute_file(file: &str, python_bridge: bool, gpu_enabled: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn execute_file(
+    file: &str,
+    python_bridge: bool,
+    gpu_enabled: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("📁 Executing ML job from file: {}", file);
-    
+
     let config = VMConfig {
         memory_limit: 1024 * 1024 * 1024,
         max_iterations: 10000,
@@ -217,10 +225,10 @@ async fn execute_file(file: &str, python_bridge: bool, gpu_enabled: bool) -> Res
     };
 
     let mut vm = EnhancedVM::new(config)?;
-    
+
     // Read and execute the file
     let content = std::fs::read_to_string(file)?;
-    
+
     if file.ends_with(".py") {
         // Execute as Python
         match vm.execute_python(&content).await {
@@ -234,7 +242,7 @@ async fn execute_file(file: &str, python_bridge: bool, gpu_enabled: bool) -> Res
             if line.trim().is_empty() || line.starts_with("#") {
                 continue;
             }
-            
+
             match execute_command(&mut vm, line).await {
                 Ok(result) => println!("Line {}: {}", i + 1, result),
                 Err(e) => {
@@ -244,7 +252,7 @@ async fn execute_file(file: &str, python_bridge: bool, gpu_enabled: bool) -> Res
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -253,7 +261,7 @@ async fn show_info() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔍 BCAI Enhanced VM Information");
     println!("===============================");
     println!();
-    
+
     println!("📊 VM Capabilities:");
     println!("  • Native ML Instructions: 200+");
     println!("  • Tensor Operations: ✅");
@@ -261,22 +269,22 @@ async fn show_info() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • Python Bridge: ✅");
     println!("  • Hardware Acceleration: ✅");
     println!();
-    
+
     println!("🖥️  Hardware Backends:");
     println!("  • CPU: ✅ (Always available)");
-    
+
     #[cfg(feature = "cuda")]
     println!("  • CUDA: ✅ (Available)");
     #[cfg(not(feature = "cuda"))]
     println!("  • CUDA: ❌ (Not compiled)");
-    
+
     #[cfg(feature = "metal-gpu")]
     println!("  • Metal: ✅ (Available)");
     #[cfg(not(feature = "metal-gpu"))]
     println!("  • Metal: ❌ (Not compiled)");
-    
+
     println!();
-    
+
     println!("🐍 Python Integration:");
     #[cfg(feature = "enhanced-vm")]
     {
@@ -289,7 +297,7 @@ async fn show_info() -> Result<(), Box<dyn std::error::Error>> {
     {
         println!("  • Status: ❌ (Enhanced VM not compiled)");
     }
-    
+
     println!();
     println!("📝 Supported ML Architectures:");
     println!("  • Linear Regression: ✅");
@@ -299,7 +307,7 @@ async fn show_info() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • LSTM: ✅");
     println!("  • Transformers: ✅");
     println!("  • Custom Architectures: ✅");
-    
+
     Ok(())
 }
 
@@ -309,7 +317,7 @@ async fn run_benchmark(iterations: u32) -> Result<(), Box<dyn std::error::Error>
     println!("==================================");
     println!("Iterations: {}", iterations);
     println!();
-    
+
     let config = VMConfig {
         memory_limit: 1024 * 1024 * 1024,
         max_iterations: iterations,
@@ -321,45 +329,35 @@ async fn run_benchmark(iterations: u32) -> Result<(), Box<dyn std::error::Error>
     };
 
     let mut vm = EnhancedVM::new(config)?;
-    
+
     println!("🔥 Tensor Operations Benchmark:");
     let start = std::time::Instant::now();
-    
+
     // Create test tensors
-    let create_instruction = MLInstruction::TensorCreate {
-        id: 1,
-        shape: vec![1000, 1000],
-        data: vec![1.0; 1000000],
-    };
+    let create_instruction =
+        MLInstruction::TensorCreate { id: 1, shape: vec![1000, 1000], data: vec![1.0; 1000000] };
     vm.execute_ml_instruction(create_instruction).await?;
-    
-    let create_instruction2 = MLInstruction::TensorCreate {
-        id: 2,
-        shape: vec![1000, 1000],
-        data: vec![2.0; 1000000],
-    };
+
+    let create_instruction2 =
+        MLInstruction::TensorCreate { id: 2, shape: vec![1000, 1000], data: vec![2.0; 1000000] };
     vm.execute_ml_instruction(create_instruction2).await?;
-    
+
     // Benchmark tensor addition
     for i in 0..iterations {
-        let add_instruction = MLInstruction::TensorAdd {
-            input1: 1,
-            input2: 2,
-            output: 3,
-        };
+        let add_instruction = MLInstruction::TensorAdd { input1: 1, input2: 2, output: 3 };
         vm.execute_ml_instruction(add_instruction).await?;
     }
-    
+
     let duration = start.elapsed();
     let ops_per_second = iterations as f64 / duration.as_secs_f64();
-    
+
     println!("  ⏱️  Time: {:?}", duration);
     println!("  📈 Operations/sec: {:.2}", ops_per_second);
     println!("  🎯 Throughput: {:.2} MFLOPS", ops_per_second * 1000000.0 / 1e6);
-    
+
     println!();
     println!("✅ Benchmark completed successfully!");
-    
+
     Ok(())
 }
 
@@ -384,7 +382,7 @@ async fn run_basic_interactive() -> Result<(), Box<dyn std::error::Error>> {
         print!("vm> ");
         use std::io::{self, Write};
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let input = input.trim();
@@ -405,7 +403,7 @@ async fn run_basic_interactive() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(not(feature = "enhanced-vm"))]
 fn execute_basic_command(vm: &mut Vm, command: &str) -> Result<String, Box<dyn std::error::Error>> {
     let parts: Vec<&str> = command.split_whitespace().collect();
-    
+
     match parts.get(0) {
         Some(&"push") => {
             if parts.len() != 2 {
@@ -431,9 +429,7 @@ fn execute_basic_command(vm: &mut Vm, command: &str) -> Result<String, Box<dyn s
             vm.execute_instruction(Instruction::Div)?;
             Ok("Divided top two values".to_string())
         }
-        Some(&"stack") => {
-            Ok(format!("Stack: {:?}", vm.stack()))
-        }
+        Some(&"stack") => Ok(format!("Stack: {:?}", vm.stack())),
         _ => Err(format!("Unknown command: {}", parts.get(0).unwrap_or(&"")).into()),
     }
 }
@@ -443,16 +439,16 @@ async fn show_basic_info() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔍 BCAI Basic VM Information");
     println!("============================");
     println!();
-    
+
     println!("📊 VM Capabilities:");
     println!("  • Stack-based VM: ✅");
     println!("  • Basic Arithmetic: ✅");
     println!("  • Memory Operations: ✅");
     println!("  • Enhanced ML: ❌ (Not compiled)");
     println!();
-    
+
     println!("💡 To enable enhanced features:");
     println!("  cargo build --features enhanced-vm");
-    
+
     Ok(())
 }

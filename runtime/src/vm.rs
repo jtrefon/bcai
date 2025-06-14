@@ -45,14 +45,14 @@ impl Vm {
             max_memory_size: 1000,
         }
     }
-    
+
     pub fn execute(&mut self, program: &[Instruction]) -> Result<f64, VmError> {
         for instruction in program {
             self.execute_instruction(*instruction)?;
         }
         self.stack.pop().ok_or(VmError::StackUnderflow)
     }
-    
+
     pub fn execute_instruction(&mut self, instruction: Instruction) -> Result<(), VmError> {
         match instruction {
             Instruction::Push(value) => {
@@ -143,15 +143,15 @@ impl Vm {
         }
         Ok(())
     }
-    
+
     pub fn stack(&self) -> &[f64] {
         &self.stack
     }
-    
+
     pub fn memory(&self) -> &[f64] {
         &self.memory
     }
-    
+
     pub fn pc(&self) -> usize {
         self.pc
     }
@@ -161,4 +161,4 @@ impl Default for Vm {
     fn default() -> Self {
         Self::new()
     }
-} 
+}
