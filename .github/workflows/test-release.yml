@@ -1,0 +1,77 @@
+name: Test Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_platform:
+        description: 'Platform to test'
+        required: true
+        default: 'ubuntu-latest'
+        type: choice
+        options:
+        - ubuntu-latest
+        - windows-latest
+        - macos-14
+
+jobs:
+  test-build:
+    runs-on: ${{ github.event.inputs.test_platform }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Set target and binary extension
+        id: config
+        run: |
+          case "${{ github.event.inputs.test_platform }}" in
+            "ubuntu-latest")
+              echo "target=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT
+              echo "binary_ext=" >> $GITHUB_OUTPUT
+              ;;
+            "windows-latest")
+              echo "target=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
+              echo "binary_ext=.exe" >> $GITHUB_OUTPUT
+              ;;
+            "macos-14")
+              echo "target=aarch64-apple-darwin" >> $GITHUB_OUTPUT
+              echo "binary_ext=" >> $GITHUB_OUTPUT
+              ;;
+          esac
+      
+      - name: Build all binaries
+        run: |
+          rustup target add ${{ steps.config.outputs.target }}
+          cargo build --release --target ${{ steps.config.outputs.target }} --manifest-path devnet/Cargo.toml
+          cargo build --release --target ${{ steps.config.outputs.target }} --manifest-path jobmanager/Cargo.toml
+          cargo build --release --target ${{ steps.config.outputs.target }} --manifest-path keygen/Cargo.toml
+          cargo build --release --target ${{ steps.config.outputs.target }} --manifest-path dashboard/Cargo.toml
+      
+      - name: Test binaries
+        run: |
+          ./target/${{ steps.config.outputs.target }}/release/devnet${{ steps.config.outputs.binary_ext }} --help
+          ./target/${{ steps.config.outputs.target }}/release/jobmanager${{ steps.config.outputs.binary_ext }} --help
+          ./target/${{ steps.config.outputs.target }}/release/keygen${{ steps.config.outputs.binary_ext }} --help
+          ./target/${{ steps.config.outputs.target }}/release/dashboard${{ steps.config.outputs.binary_ext }} --help
+        shell: bash
+      
+      - name: Package test
+        run: |
+          mkdir -p package
+          cp target/${{ steps.config.outputs.target }}/release/devnet${{ steps.config.outputs.binary_ext }} package/
+          cp target/${{ steps.config.outputs.target }}/release/jobmanager${{ steps.config.outputs.binary_ext }} package/
+          cp target/${{ steps.config.outputs.target }}/release/keygen${{ steps.config.outputs.binary_ext }} package/
+          cp target/${{ steps.config.outputs.target }}/release/dashboard${{ steps.config.outputs.binary_ext }} package/
+          cd package && tar -czf ../test-build.tar.gz *
+          echo "Package created successfully: $(ls -la ../test-build.tar.gz)"
+        shell: bash
+      
+      - name: Upload test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-${{ github.event.inputs.test_platform }}
+          path: test-build.tar.gz
+          retention-days: 1 

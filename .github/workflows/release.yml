@@ -1,53 +1,173 @@
-name: Build Releases
+name: Build and Release
 
 on:
   push:
     tags:
       - 'v*'
+  # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+        default: 'v0.1.0'
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: linux-x86_64
+            binary_ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: windows-x86_64
+            binary_ext: ".exe"
           - os: macos-14
             target: aarch64-apple-darwin
             artifact: macos-aarch64
+            binary_ext: ""
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: macos-x86_64
+            binary_ext: ""
+    
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
-      - name: Build devnet
-        run: cargo build --release --manifest-path devnet/Cargo.toml --target ${{ matrix.target }}
-      - name: Build jobmanager
-        run: cargo build --release --manifest-path jobmanager/Cargo.toml --target ${{ matrix.target }}
-      - name: Package binaries
+          targets: ${{ matrix.target }}
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build all binaries
         run: |
-          mkdir package
-          cp target/${{ matrix.target }}/release/devnet package/
-          cp target/${{ matrix.target }}/release/jobmanager package/
-          tar -czf ${{ matrix.artifact }}.tar.gz -C package .
-      - uses: actions/upload-artifact@v3
+          cargo build --release --target ${{ matrix.target }} --manifest-path devnet/Cargo.toml
+          cargo build --release --target ${{ matrix.target }} --manifest-path jobmanager/Cargo.toml
+          cargo build --release --target ${{ matrix.target }} --manifest-path keygen/Cargo.toml
+          cargo build --release --target ${{ matrix.target }} --manifest-path dashboard/Cargo.toml
+      
+      - name: Create package directory
+        run: mkdir -p package
+      
+      - name: Package binaries (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cp target/${{ matrix.target }}/release/devnet package/devnet${{ matrix.binary_ext }}
+          cp target/${{ matrix.target }}/release/jobmanager package/jobmanager${{ matrix.binary_ext }}
+          cp target/${{ matrix.target }}/release/keygen package/keygen${{ matrix.binary_ext }}
+          cp target/${{ matrix.target }}/release/dashboard package/dashboard${{ matrix.binary_ext }}
+          chmod +x package/*
+          cd package && tar -czf ../${{ matrix.artifact }}.tar.gz *
+      
+      - name: Package binaries (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          copy target\${{ matrix.target }}\release\devnet.exe package\devnet.exe
+          copy target\${{ matrix.target }}\release\jobmanager.exe package\jobmanager.exe
+          copy target\${{ matrix.target }}\release\keygen.exe package\keygen.exe
+          copy target\${{ matrix.target }}\release\dashboard.exe package\dashboard.exe
+          cd package && tar -czf ..\${{ matrix.artifact }}.tar.gz *
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}.tar.gz
+          retention-days: 5
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    
     steps:
-      - uses: actions/download-artifact@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
           path: dist
-      - uses: softprops/action-gh-release@v1
+      
+      - name: Display structure of downloaded files
+        run: ls -la dist/**
+      
+      - name: Move artifacts to release directory
+        run: |
+          mkdir -p release
+          find dist -name "*.tar.gz" -exec cp {} release/ \;
+          ls -la release/
+      
+      - name: Get tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag_name=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          files: dist/**/*.tar.gz
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          name: Release ${{ steps.tag.outputs.tag_name }}
+          body: |
+            ## BCAI Release ${{ steps.tag.outputs.tag_name }}
+            
+            This release contains the following binaries:
+            - **devnet**: Development network node
+            - **jobmanager**: Job management CLI
+            - **keygen**: Key generation utility
+            - **dashboard**: Network dashboard
+            
+            ### Supported Platforms
+            - Linux x86_64
+            - Windows x86_64
+            - macOS ARM64 (Apple Silicon)
+            - macOS x86_64 (Intel)
+            
+            ### Installation
+            1. Download the appropriate archive for your platform
+            2. Extract the archive: `tar -xzf <archive-name>.tar.gz`
+            3. Make binaries executable (Unix): `chmod +x *`
+            4. Add to PATH or run directly
+            
+            ### Usage
+            ```bash
+            # Start development network
+            ./devnet --help
+            
+            # Manage jobs
+            ./jobmanager --help
+            
+            # Generate keys
+            ./keygen --help
+            
+            # Launch dashboard
+            ./dashboard --help
+            ```
+          files: release/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
