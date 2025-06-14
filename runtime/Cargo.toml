@@ -3,6 +3,10 @@ name = "runtime"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "blockchain"
+path = "src/bin/blockchain.rs"
+
 [dependencies]
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
