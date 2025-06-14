@@ -86,6 +86,14 @@ demonstrates how jobs could be posted and managed locally. It is an early
 prototype meant to accompany the roadmap items and can be built with
 `cargo build` inside that directory.
 
+For generating account keys there is also a simple tool in `keygen/`:
+
+```bash
+cargo run --manifest-path keygen/Cargo.toml --
+```
+This prints a new Ed25519 keypair in JSON that can be saved for your first
+transactions.
+
 ### VM Runtime
 An experimental VM implementation lives under `runtime/`. It currently supports
 basic stack-based arithmetic instructions and serves as the foundation for a

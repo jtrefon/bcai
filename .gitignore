@@ -6,3 +6,4 @@
 /runtime/Cargo.lock
 /p2p/target
 /p2p/Cargo.lock
+/keygen/target
