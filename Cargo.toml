@@ -1,0 +1,47 @@
+[workspace]
+members = [
+    "runtime",
+    "p2p", 
+    "devnet",
+    "keygen",
+    "jobmanager",
+    "dashboard"
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Shared dependencies across workspace
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wgpu = "25"
+pollster = "0.3"
+bytemuck = { version = "1.14", features = ["derive"] }
+rand = "0.8"
+sha2 = "0.10"
+smartcore = { version = "0.4", default-features = false, features = ["datasets"] }
+rayon = "1"
+chrono = { version = "0.4.41", features = ["serde"] }
+clap = { version = "4.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+
+# Main BCAI binary package
+[package]
+name = "bcai"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+runtime = { path = "runtime" }
+p2p = { path = "p2p" }
+devnet = { path = "devnet" }
+keygen = { path = "keygen" }
+jobmanager = { path = "jobmanager" }
+tokio = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[bin]]
+name = "bcai"
+path = "bcai-cli.rs" 

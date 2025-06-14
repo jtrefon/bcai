@@ -8,8 +8,9 @@
 
 use crate::{
     node::{NodeCapability, TrainingResult},
-    pouw::{Solution, Task, generate_task, verify},
+    pouw::{Solution, Task, generate_task, verify, verify_production},
     token::TokenLedger,
+    smart_contracts::{SmartContractEngine, ContractResult},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -23,15 +24,21 @@ pub enum BlockchainError {
     #[error("Invalid block: {0}")]
     InvalidBlock(String),
     #[error("Block not found: {0}")]
-    BlockNotFound(u64),
-    #[error("Transaction invalid: {0}")]
+    BlockNotFound(String),
+    #[error("Invalid chain: {0}")]
+    InvalidChain(String),
+    #[error("Fork resolution failed: {0}")]
+    ForkResolutionFailed(String),
+    #[error("Transaction validation failed: {0}")]
+    TransactionFailed(String),
+    #[error("Invalid transaction: {0}")]
     InvalidTransaction(String),
-    #[error("Consensus failure: {reason}")]
-    ConsensusFailed { reason: String },
+    #[error("Insufficient proof of work")]
+    InsufficientProofOfWork,
     #[error("Insufficient stake for validation")]
     InsufficientStake,
-    #[error("Fork resolution failed")]
-    ForkResolutionFailed,
+    #[error("Genesis block error: {0}")]
+    GenesisError(String),
 }
 
 /// Transaction types in BCAI blockchain
@@ -83,6 +90,35 @@ pub enum Transaction {
     },
 }
 
+impl Transaction {
+    /// Get transaction hash for inclusion in blocks
+    pub fn hash(&self) -> String {
+        let serialized = serde_json::to_string(self).unwrap_or_default();
+        let mut hasher = Sha256::new();
+        hasher.update(serialized.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Get the sender of the transaction
+    pub fn get_sender(&self) -> &str {
+        match self {
+            Transaction::Transfer { from, .. } => from,
+            Transaction::Stake { validator, .. } => validator,
+            Transaction::JobPosting { poster, .. } => poster,
+            Transaction::TrainingSubmission { worker, .. } => worker,
+            Transaction::ValidationVote { validator, .. } => validator,
+            Transaction::RewardDistribution { .. } => "system",
+        }
+    }
+
+    /// Get the nonce of the transaction (if applicable)
+    pub fn get_nonce(&self) -> u64 {
+        // For this simplified version, we don't have nonces in the existing structure
+        // In a real implementation, we'd add nonces to prevent replay attacks
+        0
+    }
+}
+
 /// Block in the BCAI blockchain
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
@@ -96,6 +132,105 @@ pub struct Block {
     pub merkle_root: String,
     pub state_root: String,
     pub hash: String,
+}
+
+impl Block {
+    /// Create a new block
+    pub fn new(
+        height: u64,
+        previous_hash: String,
+        transactions: Vec<Transaction>,
+        _difficulty: u32,
+        validator: String,
+        pouw_task: Task,
+        pouw_solution: Solution,
+    ) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let merkle_root = Self::calculate_merkle_root(&transactions);
+        let state_root = "state_root_placeholder".to_string(); // Simplified
+        
+        let mut block = Block {
+            height,
+            previous_hash,
+            timestamp,
+            transactions,
+            validator,
+            pouw_task,
+            pouw_solution,
+            merkle_root,
+            state_root,
+            hash: String::new(), // Will be calculated
+        };
+
+        block.hash = Self::calculate_hash(&block);
+        block
+    }
+
+    /// Calculate merkle root of transactions
+    fn calculate_merkle_root(transactions: &[Transaction]) -> String {
+        if transactions.is_empty() {
+            return "0".repeat(64);
+        }
+
+        let mut hashes: Vec<String> = transactions.iter().map(|tx| tx.hash()).collect();
+
+        while hashes.len() > 1 {
+            let mut next_level = Vec::new();
+            
+            for chunk in hashes.chunks(2) {
+                let combined = if chunk.len() == 2 {
+                    format!("{}{}", chunk[0], chunk[1])
+                } else {
+                    format!("{}{}", chunk[0], chunk[0]) // Duplicate if odd
+                };
+                
+                let mut hasher = Sha256::new();
+                hasher.update(combined.as_bytes());
+                next_level.push(format!("{:x}", hasher.finalize()));
+            }
+            
+            hashes = next_level;
+        }
+
+        hashes[0].clone()
+    }
+
+    /// Calculate the hash of a block
+    fn calculate_hash(block: &Block) -> String {
+        let mut block_copy = block.clone();
+        block_copy.hash = String::new(); // Don't include hash in hash calculation
+        
+        let serialized = serde_json::to_string(&block_copy).unwrap_or_default();
+        let mut hasher = Sha256::new();
+        hasher.update(serialized.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Validate the block
+    pub fn validate(&self) -> Result<(), BlockchainError> {
+        // 1. Validate hash
+        let calculated_hash = Self::calculate_hash(self);
+        if calculated_hash != self.hash {
+            return Err(BlockchainError::InvalidBlock("Hash mismatch".to_string()));
+        }
+
+        // 2. Validate merkle root
+        let calculated_merkle = Self::calculate_merkle_root(&self.transactions);
+        if calculated_merkle != self.merkle_root {
+            return Err(BlockchainError::InvalidBlock("Merkle root mismatch".to_string()));
+        }
+
+        // 3. Validate proof of useful work
+        if !verify_production(&self.pouw_task, &self.pouw_solution, 0x0000ffff) {
+            return Err(BlockchainError::InsufficientProofOfWork);
+        }
+
+        Ok(())
+    }
 }
 
 /// Blockchain state for BCAI network
@@ -375,14 +510,16 @@ impl Blockchain {
     }
 
     /// Add a validated block to the chain
-    pub fn add_block(&mut self, block: Block) -> Result<(), BlockchainError> {
+    pub fn add_block(&mut self, block: Block) -> Result<bool, BlockchainError> {
         // Validate block
         self.validate_block(&block)?;
 
         // Apply transactions to state
+        let mut temp_state = self.state.clone();
         for tx in &block.transactions {
-            self.apply_transaction(&mut self.state, tx)?;
+            self.apply_transaction(&mut temp_state, tx)?;
         }
+        self.state = temp_state;
 
         // Add block to chain
         self.blocks.push(block);
@@ -392,7 +529,7 @@ impl Blockchain {
             self.adjust_difficulty();
         }
 
-        Ok(())
+        Ok(true) // Always main chain in this simplified implementation
     }
 
     /// Validate a block
@@ -410,7 +547,7 @@ impl Blockchain {
         }
 
         // Validate PoUW solution
-        if !verify(&block.pouw_task, &block.pouw_solution, self.current_difficulty) {
+        if !verify_production(&block.pouw_task, &block.pouw_solution, self.current_difficulty) {
             return Err(BlockchainError::InvalidBlock("Invalid PoUW solution".to_string()));
         }
 
@@ -445,8 +582,7 @@ impl Blockchain {
                 state.token_ledger.transfer(from, to, *amount)
                     .map_err(|e| BlockchainError::InvalidTransaction(e.to_string()))?;
                 // Fee goes to validator (simplified)
-                state.token_ledger.mint("validator_pool", *fee)
-                    .map_err(|e| BlockchainError::InvalidTransaction(e.to_string()))?;
+                state.token_ledger.mint("validator_pool", *fee);
             }
             
             Transaction::Stake { validator, amount } => {
@@ -605,6 +741,49 @@ impl Blockchain {
     /// Get block by height
     pub fn get_block(&self, height: u64) -> Option<&Block> {
         self.blocks.get(height as usize)
+    }
+
+    /// Get the current tip of the blockchain
+    pub fn get_tip(&self) -> &Block {
+        self.latest_block()
+    }
+
+    /// Calculate the next difficulty for mining
+    pub fn calculate_next_difficulty(&self) -> u32 {
+        self.current_difficulty
+    }
+
+    /// Get pending transactions for block creation
+    pub fn get_pending_transactions(&mut self, max_count: usize) -> Vec<Transaction> {
+        let mut transactions = Vec::new();
+        
+        for _ in 0..max_count {
+            if let Some(tx) = self.pending_transactions.pop_front() {
+                transactions.push(tx);
+            } else {
+                break;
+            }
+        }
+        
+        transactions
+    }
+
+    /// Get account balance from token ledger
+    pub fn get_balance(&self, account: &str) -> u64 {
+        self.state.token_ledger.balance(account)
+    }
+
+    /// Get account nonce (simplified implementation)
+    pub fn get_nonce(&self, _account: &str) -> u64 {
+        // In a real implementation, we'd track nonces per account
+        0
+    }
+
+    /// Credit balance for testing purposes
+    #[cfg(test)]
+    pub fn credit_balance(&mut self, account: &str, amount: u64) -> Result<(), BlockchainError> {
+        self.state.token_ledger.mint(account, amount);
+        Ok(())
     }
 
     /// Calculate block hash

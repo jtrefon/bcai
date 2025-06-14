@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 BCAI Production CLI v3.0.0");
@@ -145,7 +143,8 @@ async fn handle_smart_contracts(args: &[String]) -> Result<(), Box<dyn std::erro
             println!("✅ AI Job Contract deployed successfully");
         }
         "stake" => {
-            let amount = args.get(1).unwrap_or(&"100000".to_string());
+            let default_amount = "100000".to_string();
+            let amount = args.get(1).unwrap_or(&default_amount);
             println!("🏦 Creating Staking Contract...");
             println!("   Amount: {} BCAI", amount);
             println!("   Lock Period: 90 days");

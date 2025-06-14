@@ -13,7 +13,7 @@ pub struct Task {
 }
 
 /// Result of solving a task along with a nonce that satisfies the difficulty.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct Solution {
     pub result: Vec<Vec<u32>>, // matrix multiplication result
     pub nonce: u64,
