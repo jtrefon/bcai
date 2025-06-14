@@ -218,7 +218,7 @@ impl ConsensusNode {
                 hash_count += 1;
 
                 // Check if solution meets difficulty
-                if crate::pouw::verify_production(&task, &solution, difficulty) {
+                                 if crate::pouw::verify_production(&task, &solution, difficulty) {
                     // Create new block
                     let new_block = Block::new(
                         current_height + 1,

@@ -7,11 +7,11 @@
 //! - Validator network coordination
 
 use crate::{
-    node::{NodeCapability, TrainingResult},
-    pouw::{Solution, Task, generate_task, verify, verify_production},
+    node::NodeCapability,
+    pouw::{Solution, Task, generate_task, verify_production},
     token::TokenLedger,
-    smart_contracts::{SmartContractEngine, ContractResult},
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
@@ -653,7 +653,7 @@ impl Blockchain {
                 }
                 
                 // Move job to completed
-                if let Some(job) = state.active_jobs.remove(job_id) {
+                if let Some(_job) = state.active_jobs.remove(job_id) {
                     let completed_job = CompletedJob {
                         job_id: *job_id,
                         final_accuracy: 0.0, // Calculate from submissions
