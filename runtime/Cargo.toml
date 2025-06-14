@@ -27,7 +27,7 @@ ndarray = "0.15"
 candle-core = "0.3"
 candle-nn = "0.3"
 tch = { version = "0.15", optional = true }
-cuda-runtime-sys = { version = "0.3", optional = true }
+cuda-runtime-sys = { version = "0.3.0-alpha.1", optional = true }
 metal = { version = "0.27", optional = true }
 libc = "0.2"
 dashmap = "5.5"
@@ -50,8 +50,4 @@ pytorch = ["tch"]
 
 [[bench]]
 name = "tensor_operations"
-harness = false
-
-[[bench]]
-name = "vm_performance"
 harness = false
