@@ -11,6 +11,7 @@ pub mod node;
 pub mod p2p_service;
 pub mod pouw;
 pub mod security;
+pub mod smart_contracts;
 pub mod token;
 pub mod trainer;
 

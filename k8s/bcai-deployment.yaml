@@ -1,0 +1,270 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: bcai-validator
+  namespace: bcai-production
+  labels:
+    app: bcai-validator
+    tier: validator
+spec:
+  serviceName: bcai-validator-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bcai-validator
+      tier: validator
+  template:
+    metadata:
+      labels:
+        app: bcai-validator
+        tier: validator
+    spec:
+      serviceAccountName: bcai-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: bcai-validator
+        image: bcai/node:latest
+        imagePullPolicy: Always
+        ports:
+        - name: p2p
+          containerPort: 4001
+          protocol: TCP
+        - name: api
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: BCAI_NODE_TYPE
+          value: "validator"
+        - name: BCAI_NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: BCAI_LISTEN_PORT
+          value: "4001"
+        - name: BCAI_API_PORT
+          value: "8080"
+        - name: BCAI_METRICS_PORT
+          value: "9090"
+        - name: BCAI_SECURITY_LEVEL
+          value: "critical"
+        - name: BCAI_INITIAL_STAKE
+          value: "50000"
+        - name: BCAI_CONFIG_PATH
+          value: "/app/config"
+        - name: BCAI_DATA_PATH
+          value: "/app/data"
+        - name: BCAI_LOG_PATH
+          value: "/app/logs"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: bcai-data
+          mountPath: /app/data
+        - name: bcai-logs
+          mountPath: /app/logs
+        - name: bcai-config
+          mountPath: /app/config
+        livenessProbe:
+          exec:
+            command:
+            - /app/bin/bcai-node
+            - --health-check
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /app/bin/bcai-node
+            - --health-check
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 2
+      volumes:
+      - name: bcai-config
+        configMap:
+          name: bcai-validator-config
+  volumeClaimTemplates:
+  - metadata:
+      name: bcai-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+  - metadata:
+      name: bcai-logs
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bcai-worker
+  namespace: bcai-production
+  labels:
+    app: bcai-worker
+    tier: worker
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: bcai-worker
+      tier: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  template:
+    metadata:
+      labels:
+        app: bcai-worker
+        tier: worker
+    spec:
+      serviceAccountName: bcai-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: bcai-worker
+        image: bcai/node:latest
+        imagePullPolicy: Always
+        ports:
+        - name: p2p
+          containerPort: 4002
+          protocol: TCP
+        - name: api
+          containerPort: 8081
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: BCAI_NODE_TYPE
+          value: "worker"
+        - name: BCAI_NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: BCAI_LISTEN_PORT
+          value: "4002"
+        - name: BCAI_API_PORT
+          value: "8081"
+        - name: BCAI_METRICS_PORT
+          value: "9091"
+        - name: BCAI_SECURITY_LEVEL
+          value: "high"
+        - name: BCAI_INITIAL_STAKE
+          value: "25000"
+        - name: BCAI_BOOTSTRAP_NODES
+          value: "bcai-validator-0.bcai-validator-headless:4001,bcai-validator-1.bcai-validator-headless:4001"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1500m"
+        volumeMounts:
+        - name: bcai-data
+          mountPath: /app/data
+        - name: bcai-logs
+          mountPath: /app/logs
+        - name: bcai-config
+          mountPath: /app/config
+        livenessProbe:
+          exec:
+            command:
+            - /app/bin/bcai-node
+            - --health-check
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /app/bin/bcai-node
+            - --health-check
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 2
+      volumes:
+      - name: bcai-data
+        emptyDir: {}
+      - name: bcai-logs
+        emptyDir: {}
+      - name: bcai-config
+        configMap:
+          name: bcai-worker-config
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bcai-worker-hpa
+  namespace: bcai-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bcai-worker
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: bcai_active_jobs
+      target:
+        type: AverageValue
+        averageValue: "10"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60 
