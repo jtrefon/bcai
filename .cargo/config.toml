@@ -1,0 +1,23 @@
+[build]
+# Use a shared target directory for all workspace members
+# This prevents individual target/ directories in each crate
+target-dir = "target"
+
+[profile.dev]
+# Fast compilation for development
+opt-level = 0
+debug = true
+incremental = true
+
+[profile.release]
+# Optimized builds for production
+opt-level = 3
+debug = false
+lto = true
+panic = "abort"
+codegen-units = 1
+
+[profile.test]
+# Optimized test builds
+opt-level = 1
+debug = true 
