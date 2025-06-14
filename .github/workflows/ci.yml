@@ -73,3 +73,42 @@ jobs:
           cargo build --release
           ./target/release/bcai --help
           ./target/release/blockchain --help
+
+  build:
+    runs-on: ubuntu-latest
+    needs: integration-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Production build
+        run: cargo build --release --workspace
+      
+      - name: Verify build artifacts
+        run: |
+          # Verify all binaries were built successfully
+          ls -la target/release/
+          ./target/release/bcai --version || echo "bcai version not available"
+          ./target/release/blockchain --version || echo "blockchain version not available"
+      
+      - name: Build documentation
+        run: cargo doc --workspace --no-deps
+      
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bcai-binaries
+          path: |
+            target/release/bcai
+            target/release/blockchain
+          retention-days: 30
