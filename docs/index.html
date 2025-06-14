@@ -31,6 +31,7 @@
                 <li><a href="#home">Home</a></li>
                 <li><a href="#about">About</a></li>
                 <li><a href="#technology">Technology</a></li>
+                <li><a href="#downloads">Downloads</a></li>
                 <li><a href="#roadmap">Roadmap</a></li>
                 <li><a href="#contribute">Contribute</a></li>
                 <li><a href="https://github.com/jtrefon/bcai" class="nav-cta">GitHub</a></li>
@@ -56,7 +57,8 @@
                     creating a decentralized network where anyone can contribute computing power and earn rewards.
                 </p>
                 <div class="hero-actions">
-                    <a href="#contribute" class="btn btn-primary">Start Contributing</a>
+                    <a href="#downloads" class="btn btn-primary">Download BCAI</a>
+                    <a href="#contribute" class="btn btn-secondary">Start Contributing</a>
                     <a href="https://github.com/jtrefon/bcai" class="btn btn-secondary">View Source Code</a>
                 </div>
                 <div class="hero-stats">
@@ -238,6 +240,95 @@
                         <span class="component">AI Training</span>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Downloads -->
+    <section id="downloads" class="downloads">
+        <div class="container">
+            <div class="section-header">
+                <h2>Download BCAI</h2>
+                <p>Get the latest binaries for your platform and start running nodes or using our CLI tools</p>
+            </div>
+            
+            <div class="download-info">
+                <div class="version-info">
+                    <span class="version-badge" id="latest-version">Loading...</span>
+                    <span class="release-date" id="release-date"></span>
+                </div>
+            </div>
+            
+            <div class="download-grid" id="download-grid">
+                <!-- Downloads will be populated by JavaScript -->
+            </div>
+            
+            <div class="installation-guide">
+                <h3>Installation Instructions</h3>
+                <div class="install-tabs">
+                    <button class="tab-button active" onclick="showInstallTab('linux')">Linux</button>
+                    <button class="tab-button" onclick="showInstallTab('macos')">macOS</button>
+                    <button class="tab-button" onclick="showInstallTab('windows')">Windows</button>
+                </div>
+                
+                <div class="install-content">
+                    <div id="linux-install" class="install-tab active">
+                        <h4>Linux Installation</h4>
+                        <ol>
+                            <li>Download the Linux package above</li>
+                            <li>Extract: <code>tar -xzf bcai-linux-x64.tar.gz</code></li>
+                            <li>Run installer: <code>cd bcai-linux-x64 && ./install.sh</code></li>
+                            <li>Verify: <code>bcai --help</code></li>
+                        </ol>
+                    </div>
+                    
+                    <div id="macos-install" class="install-tab">
+                        <h4>macOS Installation</h4>
+                        <ol>
+                            <li>Download the appropriate macOS package (Intel or Apple Silicon)</li>
+                            <li>Extract: <code>tar -xzf bcai-macos-*.tar.gz</code></li>
+                            <li>Run installer: <code>cd bcai-macos-* && ./install.sh</code></li>
+                            <li>You may need to allow the app in System Preferences > Security</li>
+                            <li>Verify: <code>bcai --help</code></li>
+                        </ol>
+                    </div>
+                    
+                    <div id="windows-install" class="install-tab">
+                        <h4>Windows Installation</h4>
+                        <ol>
+                            <li>Download the Windows package above</li>
+                            <li>Extract the ZIP file</li>
+                            <li>Run <code>install.bat</code> as administrator</li>
+                            <li>Open a new Command Prompt and verify: <code>bcai --help</code></li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="quick-start">
+                <h3>Quick Start Guide</h3>
+                <div class="quick-start-grid">
+                    <div class="quick-start-card">
+                        <h4>🏃 Run a Node</h4>
+                        <p>Start participating in the BCAI network:</p>
+                        <code>blockchain --node --network testnet</code>
+                    </div>
+                    <div class="quick-start-card">
+                        <h4>💼 Submit a Job</h4>
+                        <p>Upload AI training jobs to the network:</p>
+                        <code>bcai job submit --model resnet50 --data /path/to/data</code>
+                    </div>
+                    <div class="quick-start-card">
+                        <h4>📊 Monitor Network</h4>
+                        <p>Check network status and your contributions:</p>
+                        <code>bcai status --detailed</code>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="version-history">
+                <h3>Version History</h3>
+                <p>View all releases and changelog on <a href="https://github.com/jtrefon/bcai/releases">GitHub Releases</a></p>
             </div>
         </div>
     </section>

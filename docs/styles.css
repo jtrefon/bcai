@@ -765,4 +765,253 @@ body {
     .timeline-marker {
         left: 5px;
     }
+    
+    .download-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .quick-start-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .install-tabs {
+        flex-direction: column;
+    }
+    
+    .tab-button {
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
+}
+
+/* Downloads Section */
+.downloads {
+    padding: 80px 0;
+    background: #f8f9fa;
+}
+
+.download-info {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.version-info {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.version-badge {
+    background: #667eea;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.release-date {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.download-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 30px;
+    margin-bottom: 60px;
+}
+
+.download-card {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.download-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.platform-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.download-card h3 {
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.download-card p {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+.download-btn {
+    display: inline-block;
+    background: #667eea;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.3s ease;
+}
+
+.download-btn:hover {
+    background: #5a67d8;
+}
+
+.file-size {
+    display: block;
+    color: #888;
+    font-size: 0.8rem;
+    margin-top: 8px;
+}
+
+.installation-guide {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    margin-bottom: 40px;
+}
+
+.installation-guide h3 {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.install-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 32px;
+}
+
+.tab-button {
+    padding: 12px 24px;
+    border: 2px solid #e2e8f0;
+    background: white;
+    color: #64748b;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.tab-button.active {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+}
+
+.tab-button:hover:not(.active) {
+    border-color: #cbd5e0;
+}
+
+.install-content {
+    position: relative;
+}
+
+.install-tab {
+    display: none;
+}
+
+.install-tab.active {
+    display: block;
+}
+
+.install-tab h4 {
+    margin-bottom: 16px;
+    color: #333;
+}
+
+.install-tab ol {
+    padding-left: 20px;
+}
+
+.install-tab li {
+    margin-bottom: 12px;
+    line-height: 1.6;
+}
+
+.install-tab code {
+    background: #f1f5f9;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #475569;
+    word-break: break-all;
+}
+
+.quick-start {
+    margin-bottom: 40px;
+}
+
+.quick-start h3 {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.quick-start-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+.quick-start-card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+}
+
+.quick-start-card h4 {
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.quick-start-card p {
+    margin-bottom: 12px;
+    color: #666;
+}
+
+.quick-start-card code {
+    background: #f8fafc;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #475569;
+    display: block;
+    word-break: break-all;
+}
+
+.version-history {
+    text-align: center;
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+}
+
+.version-history h3 {
+    margin-bottom: 16px;
+}
+
+.version-history a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.version-history a:hover {
+    text-decoration: underline;
 } 

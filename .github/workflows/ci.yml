@@ -3,6 +3,7 @@ name: Continuous Integration
 on:
   push:
     branches: ["*"]
+    tags: ["v*"]
   pull_request:
     branches: ["*"]
 
@@ -75,8 +76,23 @@ jobs:
           ./target/release/blockchain --help
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: integration-test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            suffix: linux-x64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            suffix: macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            suffix: macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            suffix: windows-x64
     
     steps:
       - name: Checkout code
@@ -84,31 +100,130 @@ jobs:
       
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       
-      - name: Production build
-        run: cargo build --release --workspace
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }} --workspace
       
-      - name: Verify build artifacts
+      - name: Create release package
+        shell: bash
         run: |
-          # Verify all binaries were built successfully
-          ls -la target/release/
-          ./target/release/bcai --version || echo "bcai version not available"
-          ./target/release/blockchain --version || echo "blockchain version not available"
+          # Create directory for this platform
+          mkdir -p "bcai-${{ matrix.suffix }}"
+          
+          # Copy binaries (handle Windows .exe extension)
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp "target/${{ matrix.target }}/release/bcai.exe" "bcai-${{ matrix.suffix }}/"
+            cp "target/${{ matrix.target }}/release/blockchain.exe" "bcai-${{ matrix.suffix }}/"
+          else
+            cp "target/${{ matrix.target }}/release/bcai" "bcai-${{ matrix.suffix }}/"
+            cp "target/${{ matrix.target }}/release/blockchain" "bcai-${{ matrix.suffix }}/"
+          fi
+          
+          # Add README and license
+          cp README.md "bcai-${{ matrix.suffix }}/"
+          cp LICENSE "bcai-${{ matrix.suffix }}/"
+          
+          # Create installation script
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo '@echo off' > "bcai-${{ matrix.suffix }}/install.bat"
+            echo 'echo Installing BCAI binaries...' >> "bcai-${{ matrix.suffix }}/install.bat"
+            echo 'copy bcai.exe %USERPROFILE%\.cargo\bin\ 2>nul || echo Please add this directory to your PATH' >> "bcai-${{ matrix.suffix }}/install.bat"
+            echo 'copy blockchain.exe %USERPROFILE%\.cargo\bin\ 2>nul' >> "bcai-${{ matrix.suffix }}/install.bat"
+            echo 'echo Installation complete!' >> "bcai-${{ matrix.suffix }}/install.bat"
+          else
+            echo '#!/bin/bash' > "bcai-${{ matrix.suffix }}/install.sh"
+            echo 'echo "Installing BCAI binaries..."' >> "bcai-${{ matrix.suffix }}/install.sh"
+            echo 'sudo cp bcai blockchain /usr/local/bin/ || echo "Please run with sudo or copy to a directory in your PATH"' >> "bcai-${{ matrix.suffix }}/install.sh"
+            echo 'echo "Installation complete!"' >> "bcai-${{ matrix.suffix }}/install.sh"
+            chmod +x "bcai-${{ matrix.suffix }}/install.sh"
+          fi
+          
+          # Create archive
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            7z a "bcai-${{ matrix.suffix }}.zip" "bcai-${{ matrix.suffix }}/*"
+          else
+            tar -czf "bcai-${{ matrix.suffix }}.tar.gz" "bcai-${{ matrix.suffix }}/"
+          fi
       
-      - name: Build documentation
-        run: cargo doc --workspace --no-deps
-      
-      - name: Archive build artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bcai-binaries
+          name: bcai-${{ matrix.suffix }}
           path: |
-            target/release/bcai
-            target/release/blockchain
-          retention-days: 30
+            bcai-${{ matrix.suffix }}.tar.gz
+            bcai-${{ matrix.suffix }}.zip
+          retention-days: 90
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/*/*.tar.gz
+            artifacts/*/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Update downloads data
+        run: |
+          # Create downloads data for website
+          cat > docs/downloads.json << 'EOF'
+          {
+            "latest_version": "${{ github.ref_name }}",
+            "release_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": [
+              {
+                "name": "Linux x64",
+                "filename": "bcai-linux-x64.tar.gz",
+                "download_url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/bcai-linux-x64.tar.gz"
+              },
+              {
+                "name": "macOS x64 (Intel)",
+                "filename": "bcai-macos-x64.tar.gz", 
+                "download_url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/bcai-macos-x64.tar.gz"
+              },
+              {
+                "name": "macOS ARM64 (Apple Silicon)",
+                "filename": "bcai-macos-arm64.tar.gz",
+                "download_url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/bcai-macos-arm64.tar.gz"
+              },
+              {
+                "name": "Windows x64", 
+                "filename": "bcai-windows-x64.zip",
+                "download_url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/bcai-windows-x64.zip"
+              }
+            ]
+          }
+          EOF
+      
+      - name: Commit downloads data
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/downloads.json
+          git commit -m "Update downloads for ${{ github.ref_name }}" || exit 0
+          git push

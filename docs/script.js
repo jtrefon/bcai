@@ -319,5 +319,184 @@ document.addEventListener('DOMContentLoaded', function() {
     // Call GitHub stats on load
     fetchGitHubStats();
     
+    // Downloads functionality
+    function showInstallTab(platform) {
+        // Hide all tabs
+        document.querySelectorAll('.install-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Show selected tab
+        document.getElementById(`${platform}-install`).classList.add('active');
+        document.querySelector(`[onclick="showInstallTab('${platform}')"]`).classList.add('active');
+    }
+    
+    // Load downloads data
+    async function loadDownloads() {
+        try {
+            // Try to load from local downloads.json first
+            let downloadsData;
+            try {
+                const response = await fetch('downloads.json');
+                if (response.ok) {
+                    downloadsData = await response.json();
+                }
+            } catch (e) {
+                console.log('Local downloads.json not found, using fallback');
+            }
+            
+            // If no local data, fetch from GitHub API
+            if (!downloadsData) {
+                downloadsData = await fetchLatestRelease();
+            }
+            
+            if (downloadsData) {
+                displayDownloads(downloadsData);
+            } else {
+                displayFallbackDownloads();
+            }
+        } catch (error) {
+            console.log('Failed to load downloads:', error);
+            displayFallbackDownloads();
+        }
+    }
+    
+    // Fetch latest release from GitHub API
+    async function fetchLatestRelease() {
+        try {
+            const response = await fetch('https://api.github.com/repos/jtrefon/bcai/releases/latest');
+            if (!response.ok) throw new Error('No releases found');
+            
+            const release = await response.json();
+            const assets = release.assets;
+            
+            // Map GitHub assets to our format
+            const platforms = [];
+            const platformMap = {
+                'linux-x64': { name: 'Linux x64', icon: '🐧' },
+                'macos-x64': { name: 'macOS x64 (Intel)', icon: '🍎' },
+                'macos-arm64': { name: 'macOS ARM64 (Apple Silicon)', icon: '🍎' },
+                'windows-x64': { name: 'Windows x64', icon: '🪟' }
+            };
+            
+            assets.forEach(asset => {
+                const suffix = Object.keys(platformMap).find(key => asset.name.includes(key));
+                if (suffix && platformMap[suffix]) {
+                    platforms.push({
+                        name: platformMap[suffix].name,
+                        icon: platformMap[suffix].icon,
+                        filename: asset.name,
+                        download_url: asset.browser_download_url,
+                        size: formatFileSize(asset.size)
+                    });
+                }
+            });
+            
+            return {
+                latest_version: release.tag_name,
+                release_date: release.published_at,
+                platforms: platforms
+            };
+        } catch (error) {
+            console.log('GitHub API fetch failed:', error);
+            return null;
+        }
+    }
+    
+    // Display downloads
+    function displayDownloads(data) {
+        const versionElement = document.getElementById('latest-version');
+        const dateElement = document.getElementById('release-date');
+        const gridElement = document.getElementById('download-grid');
+        
+        if (versionElement) {
+            versionElement.textContent = data.latest_version;
+        }
+        
+        if (dateElement && data.release_date) {
+            const date = new Date(data.release_date);
+            dateElement.textContent = `Released ${date.toLocaleDateString()}`;
+        }
+        
+        if (gridElement && data.platforms) {
+            gridElement.innerHTML = data.platforms.map(platform => `
+                <div class="download-card">
+                    <span class="platform-icon">${getPlatformIcon(platform.name)}</span>
+                    <h3>${platform.name}</h3>
+                    <p>Complete package with binaries, documentation, and installation scripts</p>
+                    <a href="${platform.download_url}" class="download-btn">
+                        Download ${platform.filename}
+                    </a>
+                    ${platform.size ? `<span class="file-size">${platform.size}</span>` : ''}
+                </div>
+            `).join('');
+        }
+    }
+    
+    // Display fallback downloads when API fails
+    function displayFallbackDownloads() {
+        const versionElement = document.getElementById('latest-version');
+        const gridElement = document.getElementById('download-grid');
+        
+        if (versionElement) {
+            versionElement.textContent = 'Latest';
+        }
+        
+        if (gridElement) {
+            gridElement.innerHTML = `
+                <div class="download-card">
+                    <span class="platform-icon">🐧</span>
+                    <h3>Linux x64</h3>
+                    <p>Complete package with binaries, documentation, and installation scripts</p>
+                    <a href="https://github.com/jtrefon/bcai/releases/latest" class="download-btn">
+                        View All Releases
+                    </a>
+                </div>
+                <div class="download-card">
+                    <span class="platform-icon">🍎</span>
+                    <h3>macOS</h3>
+                    <p>Universal binaries for Intel and Apple Silicon Macs</p>
+                    <a href="https://github.com/jtrefon/bcai/releases/latest" class="download-btn">
+                        View All Releases
+                    </a>
+                </div>
+                <div class="download-card">
+                    <span class="platform-icon">🪟</span>
+                    <h3>Windows x64</h3>
+                    <p>Complete package with binaries, documentation, and installation scripts</p>
+                    <a href="https://github.com/jtrefon/bcai/releases/latest" class="download-btn">
+                        View All Releases
+                    </a>
+                </div>
+            `;
+        }
+    }
+    
+    // Get platform icon
+    function getPlatformIcon(platformName) {
+        if (platformName.includes('Linux')) return '🐧';
+        if (platformName.includes('macOS')) return '🍎';
+        if (platformName.includes('Windows')) return '🪟';
+        return '💻';
+    }
+    
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+    
+    // Make showInstallTab globally available
+    window.showInstallTab = showInstallTab;
+    
+    // Load downloads on page load
+    loadDownloads();
+    
     console.log('🚀 BCAI Website Loaded! Welcome to the future of decentralized AI training.');
 }); 
