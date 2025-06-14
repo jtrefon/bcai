@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A simple matrix multiplication task used for Proof-of-Useful-Work.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Task {
     pub a: Vec<Vec<u8>>,     // NxN matrix
     pub b: Vec<Vec<u8>>,     // NxN matrix
@@ -13,7 +13,7 @@ pub struct Task {
 }
 
 /// Result of solving a task along with a nonce that satisfies the difficulty.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Solution {
     pub result: Vec<Vec<u32>>, // matrix multiplication result
     pub nonce: u64,
@@ -55,9 +55,8 @@ pub fn generate_task(size: usize, seed: u64) -> Task {
 
 /// Generate a task with explicit parameters for testing and configuration.
 pub fn generate_task_with_config(size: usize, seed: u64, _config: &PoUWConfig) -> Task {
-    let task = generate_task(size, seed);
     // Adjust difficulty based on config if needed in future
-    task
+    generate_task(size, seed)
 }
 
 /// Multiply two matrices of size NxN.
