@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "keygen"
-path = "src/bin/keygen.rs"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

@@ -6,24 +6,24 @@ pub enum Instruction {
     Pop,
     Dup,
     Swap,
-    
+
     // Arithmetic operations
     Add,
     Sub,
     Mul,
     Div,
-    
+
     // Memory operations
     Store(usize),
     Load(usize),
-    
+
     // Control flow
     Jump(usize),
     JumpIf(usize),
     Call(usize),
     Return,
-    
+
     // Program control
     Halt,
     Nop,
-} 
+}

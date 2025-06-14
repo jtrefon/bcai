@@ -45,9 +45,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # Temporarily disabled problematic binaries
-# [[bin]]
-# name = "bcai"
-# path = "bcai-cli.rs"
+[[bin]]
+name = "bcai"
+path = "bcai-cli.rs"
 
 # [[bin]]
 # name = "blockchain"

@@ -8,8 +8,7 @@
 
 use crate::{
     hardware_abstraction::HardwareBackend, python_bridge::PythonSandbox, tensor_ops::TensorManager,
-    ActivationFunction, MLInstruction, PythonConstraints, TensorId, TensorOperation,
-    VmError,
+    ActivationFunction, MLInstruction, PythonConstraints, TensorId, TensorOperation, VmError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

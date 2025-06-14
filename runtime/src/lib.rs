@@ -1,5 +1,5 @@
 //! BCAI Runtime - Enhanced VM with ML-First Architecture
-//! 
+//!
 //! This runtime provides both basic VM functionality and enhanced ML capabilities.
 
 // Basic VM modules (always available)
@@ -18,13 +18,13 @@ pub mod vm;
 #[cfg(feature = "enhanced-vm")]
 pub mod enhanced_vm;
 #[cfg(feature = "enhanced-vm")]
-pub mod ml_instructions; 
-#[cfg(feature = "enhanced-vm")]
-pub mod tensor_ops;
-#[cfg(feature = "enhanced-vm")]
 pub mod hardware_abstraction;
 #[cfg(feature = "enhanced-vm")]
+pub mod ml_instructions;
+#[cfg(feature = "enhanced-vm")]
 pub mod python_bridge;
+#[cfg(feature = "enhanced-vm")]
+pub mod tensor_ops;
 
 // Re-export core types
 pub use instruction::Instruction;
@@ -32,15 +32,15 @@ pub use vm::{Vm, VmError};
 
 // Re-export enhanced types conditionally
 #[cfg(feature = "enhanced-vm")]
-pub use enhanced_vm::{EnhancedVM, VMConfig, ExecutionContext};
+pub use enhanced_vm::{EnhancedVM, ExecutionContext, VMConfig};
+#[cfg(feature = "enhanced-vm")]
+pub use hardware_abstraction::HardwareBackend;
 #[cfg(feature = "enhanced-vm")]
 pub use ml_instructions::MLInstruction;
 #[cfg(feature = "enhanced-vm")]
-pub use tensor_ops::{Tensor, DataType, TensorId};
-#[cfg(feature = "enhanced-vm")]
 pub use python_bridge::PythonConstraints;
 #[cfg(feature = "enhanced-vm")]
-pub use hardware_abstraction::HardwareBackend;
+pub use tensor_ops::{DataType, Tensor, TensorId};
 
 // Legacy stub types for compatibility (minimal implementations)
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -50,13 +50,35 @@ pub enum LedgerError {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct TokenLedger;
+pub struct TokenLedger {
+    balances: std::collections::HashMap<String, u64>,
+}
 
 impl TokenLedger {
-    pub fn new() -> Self { Self }
-    pub fn mint(&mut self, _account: &str, _amount: u64) -> Result<(), LedgerError> { Ok(()) }
-    pub fn transfer(&mut self, _from: &str, _to: &str, _amount: u64) -> Result<(), LedgerError> { Ok(()) }
-    pub fn balance(&self, _account: &str) -> u64 { 0 }
+    pub fn new() -> Self {
+        Self { balances: std::collections::HashMap::new() }
+    }
+
+    pub fn mint(&mut self, account: &str, amount: u64) -> Result<(), LedgerError> {
+        let entry = self.balances.entry(account.to_string()).or_default();
+        *entry = entry.saturating_add(amount);
+        Ok(())
+    }
+
+    pub fn transfer(&mut self, from: &str, to: &str, amount: u64) -> Result<(), LedgerError> {
+        let from_balance = self.balances.entry(from.to_string()).or_default();
+        if *from_balance < amount {
+            return Err(LedgerError::InsufficientBalance);
+        }
+        *from_balance -= amount;
+        let to_balance = self.balances.entry(to.to_string()).or_default();
+        *to_balance = to_balance.saturating_add(amount);
+        Ok(())
+    }
+
+    pub fn balance(&self, account: &str) -> u64 {
+        *self.balances.get(account).unwrap_or(&0)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -71,7 +93,11 @@ pub fn generate_task(difficulty: u64) -> Task {
 }
 
 pub fn solve(task: &Task) -> Option<u64> {
-    if task.difficulty <= 100 { Some(42) } else { None }
+    if task.difficulty <= 100 {
+        Some(42)
+    } else {
+        None
+    }
 }
 
 pub fn verify(task: &Task, nonce: u64) -> bool {
@@ -80,31 +106,44 @@ pub fn verify(task: &Task, nonce: u64) -> bool {
 
 // Stub types for other modules
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum NetworkMessage { Ping, Pong }
+pub enum NetworkMessage {
+    Ping,
+    Pong,
+}
 
 #[derive(Debug, Clone)]
 pub struct NetworkCoordinator;
 
 impl NetworkCoordinator {
-    pub fn new(_node_id: String) -> Self { Self }
+    pub fn new(_node_id: String) -> Self {
+        Self
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum NodeCapability { BasicCompute }
+pub enum NodeCapability {
+    BasicCompute,
+}
 
 #[derive(Debug, Clone)]
 pub struct UnifiedNode;
 
 impl UnifiedNode {
-    pub fn new(_node_id: String, _capability: NodeCapability) -> Self { Self }
+    pub fn new(_node_id: String, _capability: NodeCapability) -> Self {
+        Self
+    }
 }
 
 // Additional stub types
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum AlertSeverity { Info }
+pub enum AlertSeverity {
+    Info,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum HealthStatus { Healthy }
+pub enum HealthStatus {
+    Healthy,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MonitoringConfig;
@@ -113,13 +152,18 @@ pub struct MonitoringConfig;
 pub struct MonitoringSystem;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AuthCredentials { pub username: String, pub token: String }
+pub struct AuthCredentials {
+    pub username: String,
+    pub token: String,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RateLimitConfig;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum SecurityLevel { Low }
+pub enum SecurityLevel {
+    Low,
+}
 
 #[derive(Debug, Clone)]
 pub struct SecurityManager;
@@ -133,7 +177,7 @@ impl TensorId {
     pub fn new(id: u64) -> Self {
         Self(id)
     }
-    
+
     pub fn as_u64(&self) -> u64 {
         self.0
     }
@@ -188,13 +232,12 @@ impl Blockchain {
     pub fn new() -> Self {
         Self { blocks: Vec::new() }
     }
-    
+
     pub fn add_block(&mut self, data: String) {
         let index = self.blocks.len() as u64;
-        let previous_hash = self.blocks.last()
-            .map(|b| b.hash.clone())
-            .unwrap_or_else(|| "0".to_string());
-        
+        let previous_hash =
+            self.blocks.last().map(|b| b.hash.clone()).unwrap_or_else(|| "0".to_string());
+
         let block = Block {
             index,
             timestamp: std::time::SystemTime::now()
@@ -205,7 +248,7 @@ impl Blockchain {
             hash: format!("hash_{}", index),
             previous_hash,
         };
-        
+
         self.blocks.push(block);
     }
 }

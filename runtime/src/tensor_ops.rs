@@ -420,7 +420,9 @@ impl TensorManager {
         let input_tensor = self.get_tensor(input_id)?;
         let input = input_tensor.read();
 
-        let result = input.candle_tensor.relu()
+        let result = input
+            .candle_tensor
+            .relu()
             .map_err(|e| VmError::TensorError(format!("ReLU activation failed: {}", e)))?;
 
         let output_tensor = Tensor {

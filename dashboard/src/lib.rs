@@ -6,11 +6,7 @@ use tiny_http::{Response, Server};
 pub fn render_jobs(jobs: &[Job]) -> String {
     let mut html = String::from("<html><body><h1>Jobs</h1><ul>");
     for job in jobs {
-        let assigned = job.assigned_to.as_deref().unwrap_or("-");
-        html.push_str(&format!(
-            "<li>#{} {} reward:{} assigned:{} completed:{}</li>",
-            job.id, job.description, job.reward, assigned, job.completed
-        ));
+        html.push_str(&format!("<li>#{} reward:{}</li>", job.id, job.reward));
     }
     html.push_str("</ul></body></html>");
     html
@@ -42,15 +38,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn html_contains_job_description() {
-        let jobs = vec![Job {
-            id: 1,
-            description: "test".into(),
-            reward: 10,
-            assigned_to: None,
-            completed: false,
-        }];
+    fn html_contains_job_reward() {
+        let jobs = vec![Job { id: "1".into(), data: Vec::new(), reward: 10, worker: None }];
         let html = render_jobs(&jobs);
-        assert!(html.contains("test"));
+        assert!(html.contains("reward:10"));
     }
 }
