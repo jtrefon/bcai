@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "jobmanager"
-path = "src/bin/jobmanager.rs"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.4.6", features = ["derive"] }
