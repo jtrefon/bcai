@@ -31,5 +31,5 @@ Additional milestones are outlined in `ROADMAP.md`. This checklist focuses on th
 - [ ] Conduct a third-party security audit of the runtime and contracts
 - [x] Implement token burning to allow permanent removal of tokens
 - [x] Expose a `burn` command in the devnet CLI
-- [ ] Profile PoUW execution for bottlenecks and optimize
+- [x] Profile PoUW execution for bottlenecks and optimize
 - [ ] Stress test job handling with multiple concurrent tasks
