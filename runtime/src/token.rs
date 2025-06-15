@@ -7,6 +7,8 @@ use thiserror::Error;
 pub enum LedgerError {
     #[error("insufficient balance")]
     InsufficientBalance,
+    #[error("insufficient stake")]
+    InsufficientStake,
     #[error("invalid account: {0}")]
     InvalidAccount(String),
     #[error("transaction failed: {0}")]

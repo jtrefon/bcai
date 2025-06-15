@@ -9,15 +9,15 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "runtime"
-path = "src/bin/runtime.rs"
+path = "bin/runtime.rs"
 
 [[bin]] 
 name = "vm_test_runner"
-path = "src/bin/vm_test_runner.rs"
+path = "bin/vm_test_runner.rs"
 
 [[bin]]
 name = "blockchain"
-path = "src/bin/blockchain.rs"
+path = "bin/blockchain.rs"
 
 [features]
 default = []
