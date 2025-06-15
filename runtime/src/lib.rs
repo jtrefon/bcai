@@ -13,6 +13,8 @@ pub mod distributed_storage;
 pub mod consensus_engine;
 pub mod security_layer;
 pub mod performance_optimizer;
+pub mod monitoring;
+pub mod security;
 
 // CRITICAL MISSING MODULES - Now enabling compilation
 pub mod blockchain;

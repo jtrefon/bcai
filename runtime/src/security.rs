@@ -486,7 +486,7 @@ impl SecurityManager {
             metrics.failed_authentications += 1;
 
             // Ban node if too many failed attempts
-            if metrics.failed_authentications >= self.rate_limit_config.max_requests {
+            if metrics.failed_authentications >= self.rate_limit_config.max_requests as u32 {
                 self.ban_node(node_id, current_time + self.rate_limit_config.window_seconds);
             }
         }

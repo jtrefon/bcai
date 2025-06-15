@@ -20,6 +20,10 @@ name = "production_deploy"
 path = "bin/production_deploy.rs"
 
 [[bin]]
+name = "pre_deployment_checklist"
+path = "bin/pre_deployment_checklist.rs"
+
+[[bin]]
 name = "blockchain"
 path = "bin/blockchain.rs"
 
