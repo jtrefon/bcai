@@ -8,6 +8,12 @@ pub mod large_data_transfer;
 pub mod vm;
 pub mod enhanced_p2p_service;
 
+// Phase 3: Storage Integration & Advanced Features
+pub mod distributed_storage;
+pub mod consensus_engine;
+pub mod security_layer;
+pub mod performance_optimizer;
+
 // Enhanced VM modules (optional, behind enhanced-vm feature)
 #[cfg(feature = "enhanced-vm")]
 pub mod enhanced_vm;
