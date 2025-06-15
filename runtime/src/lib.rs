@@ -6,6 +6,7 @@
 pub mod instruction;
 pub mod large_data_transfer;
 pub mod vm;
+pub mod federated;
 pub mod enhanced_p2p_service;
 
 // Phase 3: Storage Integration & Advanced Features
@@ -15,6 +16,9 @@ pub mod security_layer;
 pub mod performance_optimizer;
 pub mod monitoring;
 pub mod security;
+pub mod p2p_security;
+pub mod federated_network_coordinator;
+pub mod decentralized_filesystem;
 
 // CRITICAL MISSING MODULES - Now enabling compilation
 pub mod blockchain;

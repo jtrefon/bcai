@@ -4,6 +4,7 @@
 
 use crate::node::{DistributedJob, NodeCapability, TrainingResult, UnifiedNode};
 use crate::token::LedgerError;
+use crate::federated::{FederatedEngine, ModelParameters, FederatedStats};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -24,6 +25,38 @@ pub enum NetworkMessage {
     JobCompleted { job_id: u64, final_model_hash: String },
     StateSync { requesting_node: String, last_known_block: u64 },
     StateSyncResponse { jobs: Vec<DistributedJob>, current_block: u64 },
+    
+    // NEW: Federated Learning Messages
+    FederatedTrainingStart { 
+        job_id: u64, 
+        initial_model: ModelParameters,
+        participants: Vec<String>,
+        coordinator_id: String 
+    },
+    FederatedModelUpdate { 
+        job_id: u64, 
+        round: u32,
+        local_model: ModelParameters, 
+        node_id: String 
+    },
+    FederatedAggregationResult { 
+        job_id: u64, 
+        round: u32,
+        global_model: ModelParameters,
+        stats: FederatedStats,
+        coordinator_id: String 
+    },
+    FederatedTrainingComplete { 
+        job_id: u64, 
+        final_model: ModelParameters,
+        participants_rewards: HashMap<String, u64> 
+    },
+    LargeDataShardDistribution {
+        job_id: u64,
+        shard_hash: String,
+        target_nodes: Vec<String>,
+        shard_size_bytes: u64
+    }
 }
 
 /// Network-related errors

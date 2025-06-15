@@ -27,6 +27,14 @@ path = "bin/pre_deployment_checklist.rs"
 name = "blockchain"
 path = "bin/blockchain.rs"
 
+[[bin]]
+name = "federated_3tb_llm_demo"
+path = "bin/federated_3tb_llm_demo.rs"
+
+[[bin]]
+name = "decentralized_storage_demo"
+path = "bin/decentralized_storage_demo.rs"
+
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]
@@ -72,6 +80,7 @@ futures = "0.3"
 bytes = "1.5"
 dashmap = "5.5"
 tokio-util = { version = "0.7", features = ["codec"] }
+hex = "0.4"
 
 [dev-dependencies]
 criterion = "0.5"
