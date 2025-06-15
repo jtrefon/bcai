@@ -165,12 +165,12 @@ jobs:
           
           echo "name=bcai-binaries-${{ github.sha }}" >> $GITHUB_OUTPUT
       
-      - name: Upload build artifacts
+      - name: Upload build artifacts (internal use)
         uses: actions/upload-artifact@v4
         with:
           name: bcai-binaries-${{ github.sha }}
           path: artifacts/
-          retention-days: 30
+          retention-days: 1  # Short retention - only for pipeline stages
 
   # Stage 2: Test
   test:
@@ -491,10 +491,10 @@ jobs:
           # Store archive name for next step
           echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
       
-      - name: Upload release artifacts
+      - name: Upload production release package
         uses: actions/upload-artifact@v4
         with:
-          name: bcai-release-${{ github.sha }}
+          name: bcai-production-release
           path: ${{ env.ARCHIVE_NAME }}
           retention-days: 90
       
@@ -508,6 +508,11 @@ jobs:
           echo "   ✅ Integration: Completed"
           echo "   ✅ Publish: Completed"
           echo ""
+          echo "📦 Available Artifacts:"
+          echo "   🚀 bcai-production-release - Complete node package (DOWNLOAD THIS)"
+          echo "   🔧 bcai-binaries-* - Internal build artifacts (auto-cleanup in 1 day)"
+          echo ""
           echo "🔗 Branch: ${{ github.ref_name }}"
           echo "🔗 Commit: ${{ github.sha }}"
-          echo "🔗 Artifacts are ready for deployment" 
+          echo ""
+          echo "💡 Users should download 'bcai-production-release' for deployment" 
