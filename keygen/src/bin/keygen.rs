@@ -20,11 +20,11 @@ enum Commands {
     /// Generate a new keypair
     Generate {
         /// Output file for private key
-        #[arg(short, long, default_value = "private_key.json")]
+        #[arg(short = 'p', long, default_value = "private_key.json")]
         private_key: String,
         
         /// Output file for public key
-        #[arg(short, long, default_value = "public_key.json")]
+        #[arg(short = 'u', long, default_value = "public_key.json")]
         public_key: String,
         
         /// Key name/identifier

@@ -42,7 +42,7 @@ impl Default for PoUWConfig {
     }
 }
 
-/// Generate a PoUW task with matrix multiplication
+/// Generate a PoUW task with matrix multiplication (simple version)
 pub fn generate_task(difficulty: u64) -> Task {
     let size = 4; // 4x4 matrices for testing
     let mut rng = StdRng::from_entropy();
@@ -59,6 +59,32 @@ pub fn generate_task(difficulty: u64) -> Task {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
+    
+    let challenge: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    
+    Task {
+        difficulty,
+        data: vec![1, 2, 3, 4], // Simple placeholder for compatibility
+        target: format!("target_{}", difficulty),
+        a,
+        b,
+        timestamp,
+        challenge,
+    }
+}
+
+/// Generate a PoUW task with matrix multiplication (with timestamp)
+pub fn generate_task_with_timestamp(difficulty: u64, timestamp: u64) -> Task {
+    let size = 4; // 4x4 matrices for testing
+    let mut rng = StdRng::seed_from_u64(timestamp); // Use timestamp as seed for determinism
+    
+    let a: Vec<Vec<u8>> = (0..size)
+        .map(|_| (0..size).map(|_| rng.gen_range(1..=10)).collect())
+        .collect();
+    
+    let b: Vec<Vec<u8>> = (0..size)
+        .map(|_| (0..size).map(|_| rng.gen_range(1..=10)).collect())
+        .collect();
     
     let challenge: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
     
@@ -165,6 +191,11 @@ pub fn solve_enhanced(task: &Task, difficulty: u32) -> Solution {
     unreachable!();
 }
 
+/// Solve function with difficulty parameter (consensus_node.rs API)
+pub fn solve_with_difficulty(task: &Task, difficulty: u32) -> Solution {
+    solve_enhanced(task, difficulty)
+}
+
 /// Simple solve function for backward compatibility
 pub fn solve(task: &Task) -> Option<u64> {
     // For simple tasks without matrix data, return a simple solution
@@ -179,6 +210,11 @@ pub fn solve(task: &Task) -> Option<u64> {
         let solution = solve_enhanced(task, task.difficulty as u32);
         Some(solution.nonce)
     }
+}
+
+/// Verify function with solution parameter (consensus_node.rs API)
+pub fn verify_with_solution(task: &Task, solution: &Solution, difficulty: u32) -> bool {
+    verify_enhanced(task, solution, difficulty)
 }
 
 /// Simple verify function for backward compatibility

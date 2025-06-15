@@ -3,21 +3,30 @@
 //! This module provides the glue between libp2p networking and BCAI's distributed training system.
 
 use crate::node::{DistributedJob, NodeCapability, TrainingResult, UnifiedNode};
+use crate::token::LedgerError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// Network message types
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// Network message types for distributed coordination
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NetworkMessage {
     Ping,
     Pong,
     Data(Vec<u8>),
     Request(String),
     Response(String),
+    CapabilityAnnouncement { node_id: String, capability: NodeCapability },
+    JobPosted { job: DistributedJob, poster_id: String },
+    JobVolunteer { job_id: u64, node_id: String, capability: NodeCapability },
+    TrainingResultSubmission { result: TrainingResult, submitter_id: String },
+    TrainingEvaluation { job_id: u64, result_hash: String, is_valid: bool, evaluator_id: String },
+    JobCompleted { job_id: u64, final_model_hash: String },
+    StateSync { requesting_node: String, last_known_block: u64 },
+    StateSyncResponse { jobs: Vec<DistributedJob>, current_block: u64 },
 }
 
-/// Network coordination errors
+/// Network-related errors
 #[derive(Debug, Error)]
 pub enum NetworkError {
     #[error("Serialization error: {0}")]
@@ -30,44 +39,6 @@ pub enum NetworkError {
     InvalidMessage,
     #[error("Consensus failure")]
     ConsensusFailed,
-}
-
-/// Network coordinator for managing network operations
-#[derive(Debug, Clone, Default)]
-pub struct NetworkCoordinator {
-    node_id: String,
-    peers: Vec<String>,
-}
-
-impl NetworkCoordinator {
-    pub fn new(node_id: String) -> Self {
-        Self {
-            node_id,
-            peers: Vec::new(),
-        }
-    }
-    
-    pub fn add_peer(&mut self, peer_id: String) {
-        self.peers.push(peer_id);
-    }
-    
-    pub fn broadcast(&self, _message: NetworkMessage) -> Result<(), String> {
-        // Stub implementation
-        Ok(())
-    }
-    
-    pub fn send_to_peer(&self, _peer_id: &str, _message: NetworkMessage) -> Result<(), String> {
-        // Stub implementation
-        Ok(())
-    }
-    
-    pub fn node_id(&self) -> &str {
-        &self.node_id
-    }
-    
-    pub fn peers(&self) -> &[String] {
-        &self.peers
-    }
 }
 
 /// Network coordinator managing distributed operations
@@ -202,6 +173,8 @@ impl NetworkCoordinator {
                 }
                 self.network_block_height = current_block;
             }
+
+            _ => {} // Handle other basic message types
         }
 
         Ok(responses)
@@ -337,6 +310,7 @@ mod tests {
             gpu_memory_gb: 8,
             available_stake: 0,
             reputation: 0,
+            capability_types: vec![crate::node::CapabilityType::BasicCompute],
         };
 
         let node = UnifiedNode::new("test_node".to_string(), capability, 1000);
@@ -354,6 +328,7 @@ mod tests {
             gpu_memory_gb: 8,
             available_stake: 100,
             reputation: 0,
+            capability_types: vec![crate::node::CapabilityType::BasicCompute],
         };
 
         // Create job poster

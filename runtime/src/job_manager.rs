@@ -32,6 +32,7 @@ pub enum JobManagerError {
 }
 
 /// Minimal in-memory job manager.
+#[derive(Debug, Clone)]
 pub struct JobManager {
     jobs: Vec<Job>,
     ledger: TokenLedger,

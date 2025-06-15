@@ -1,7 +1,7 @@
 use crate::blockchain::{Block, Blockchain, BlockchainConfig, BlockchainError, Transaction};
 use crate::neural_network::NeuralNetwork;
 use crate::node::NodeCapability;
-use crate::pouw::{generate_task, solve};
+use crate::pouw::{generate_task_with_timestamp, solve_with_difficulty, verify_production};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -138,6 +138,7 @@ impl ConsensusNode {
             gpu_memory_gb: 8,
             available_stake: 1000,
             reputation: 100,
+            capability_types: vec![crate::node::CapabilityType::BasicCompute, crate::node::CapabilityType::Training],
         }];
 
         Ok(ConsensusNode {
@@ -221,13 +222,13 @@ impl ConsensusNode {
                 }
 
                 // Generate PoUW task
-                let task = generate_task(
+                let task = generate_task_with_timestamp(
                     4,
                     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
                 );
 
                 // Try to solve the task
-                let solution = solve(&task, difficulty);
+                let solution = solve_with_difficulty(&task, difficulty);
                 hash_count += 1;
 
                 // Check if solution meets difficulty
@@ -376,10 +377,11 @@ impl ConsensusNode {
 
         // Create proof of work for the training
         let task =
-            generate_task(2, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
-        let solution = solve(&task, 0x0000ffff);
+            generate_task_with_timestamp(2, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
+        let solution = solve_with_difficulty(&task, 0x0000ffff);
 
         // Create AI training submission transaction
+        let nonce = self.get_nonce(&self.config.node_id) + 1;
         let tx = Transaction::TrainingSubmission {
             worker: self.config.node_id.clone(),
             job_id,
@@ -389,6 +391,7 @@ impl ConsensusNode {
             ),
             pouw_solution: solution,
             accuracy_claim: final_accuracy as f64,
+            nonce,
         };
 
         // Submit the transaction
@@ -398,12 +401,14 @@ impl ConsensusNode {
     /// Create a token transfer transaction
     pub fn create_transfer(&self, to: &str, amount: u64) -> ConsensusResult<String> {
         let from = &self.config.node_id;
+        let nonce = self.get_nonce(from) + 1;
 
         let tx = Transaction::Transfer {
             from: from.clone(),
             to: to.to_string(),
             amount,
             fee: 1, // Small fee for mining
+            nonce,
         };
 
         self.submit_transaction(tx)
@@ -412,8 +417,13 @@ impl ConsensusNode {
     /// Create a staking transaction
     pub fn create_stake(&self, amount: u64) -> ConsensusResult<String> {
         let validator = &self.config.node_id;
+        let nonce = self.get_nonce(validator) + 1;
 
-        let tx = Transaction::Stake { validator: validator.clone(), amount };
+        let tx = Transaction::Stake { 
+            validator: validator.clone(), 
+            amount,
+            nonce,
+        };
 
         self.submit_transaction(tx)
     }

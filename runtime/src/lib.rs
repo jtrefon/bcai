@@ -14,6 +14,17 @@ pub mod consensus_engine;
 pub mod security_layer;
 pub mod performance_optimizer;
 
+// CRITICAL MISSING MODULES - Now enabling compilation
+pub mod blockchain;
+pub mod consensus_node;
+pub mod neural_network;
+pub mod network;
+pub mod node;
+pub mod smart_contracts;
+pub mod job_manager;
+pub mod evaluator;
+pub mod trainer;
+
 // Enhanced VM modules (optional, behind enhanced-vm feature)
 #[cfg(feature = "enhanced-vm")]
 pub mod enhanced_vm;
@@ -50,7 +61,19 @@ pub use hardware_abstraction::HardwareBackend;
 pub use token::{TokenLedger, LedgerError};
 pub use pouw::{Task, generate_task, solve, verify};
 
-// Stub types for enhanced_p2p_service compatibility
+// Re-export critical types from newly enabled modules
+pub use blockchain::{Block as BcBlock, Blockchain as BcBlockchain, Transaction as BcTransaction, BlockchainConfig, BlockchainError};
+pub use consensus_node::{ConsensusNode, ConsensusConfig, MiningStats};
+pub use neural_network::{NeuralNetwork, TrainingData, TrainingMetrics};
+pub use network::{NetworkCoordinator as NetCoordinator, NetworkMessage as NetMessage};
+pub use node::{UnifiedNode as Node, NodeCapability, CapabilityType, DistributedJob, NodeStatus, TrainingResult};
+pub use smart_contracts::{SmartContract, AIJobContract};
+pub use job_manager::{Job, JobManager};
+pub use evaluator::Evaluator;
+pub use trainer::Trainer;
+
+// Stub types for enhanced_p2p_service compatibility (temporary until we fix conflicts)
+// These will be removed once we resolve the NetworkCoordinator duplication issue
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum NetworkMessage {
     Ping,
@@ -67,14 +90,6 @@ impl NetworkCoordinator {
     pub fn new(node_id: String) -> Self {
         Self { node_id }
     }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum NodeCapability {
-    BasicCompute,
-    Training,
-    Inference,
-    Storage,
 }
 
 #[derive(Debug, Clone)]
@@ -131,7 +146,7 @@ impl Default for VmConfig {
     }
 }
 
-// Simple blockchain types for compatibility
+// Simple blockchain types for compatibility (these are legacy and will be phased out)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     pub index: u64,

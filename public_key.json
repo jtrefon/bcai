@@ -1,0 +1,7 @@
+{
+  "created_at": "2025-06-15T15:11:30.851201+00:00",
+  "name": "test_node_2",
+  "public_key": "6cf411d30cdda76231060ec020ef8428d5e1167960c716a76bf9686589a8dd76",
+  "type": "Ed25519",
+  "version": "1.0"
+}

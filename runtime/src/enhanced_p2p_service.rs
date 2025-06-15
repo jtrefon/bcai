@@ -439,7 +439,14 @@ mod tests {
     #[tokio::test]
     async fn test_enhanced_p2p_service_creation() {
         let config = EnhancedP2PConfig::default();
-        let capability = NodeCapability::BasicCompute;
+        let capability = NodeCapability {
+            cpus: 2,
+            gpus: 0,
+            gpu_memory_gb: 0,
+            available_stake: 0,
+            reputation: 0,
+            capability_types: vec![crate::node::CapabilityType::BasicCompute],
+        };
 
         let node = UnifiedNode::new("test_node".to_string(), capability);
         let result = create_enhanced_p2p_service(config, node);
@@ -450,7 +457,14 @@ mod tests {
     #[tokio::test]
     async fn test_service_lifecycle() {
         let config = EnhancedP2PConfig::default();
-        let capability = NodeCapability::BasicCompute;
+        let capability = NodeCapability {
+            cpus: 2,
+            gpus: 0,
+            gpu_memory_gb: 0,
+            available_stake: 0,
+            reputation: 0,
+            capability_types: vec![crate::node::CapabilityType::BasicCompute],
+        };
 
         let node = UnifiedNode::new("test_node".to_string(), capability);
         let service = create_enhanced_p2p_service(config, node).unwrap();
