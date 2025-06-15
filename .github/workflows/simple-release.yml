@@ -1,0 +1,74 @@
+name: Simple Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x86_64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            artifact: macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build core components
+        run: |
+          cargo build --release --manifest-path runtime/Cargo.toml --target ${{ matrix.target }} --no-default-features
+          cargo build --release --manifest-path devnet/Cargo.toml --target ${{ matrix.target }}
+          cargo build --release --manifest-path jobmanager/Cargo.toml --target ${{ matrix.target }}
+          cargo build --release --manifest-path keygen/Cargo.toml --target ${{ matrix.target }}
+          cargo build --release --manifest-path dashboard/Cargo.toml --target ${{ matrix.target }}
+      - name: Package binaries
+        run: |
+          mkdir package
+          cp target/${{ matrix.target }}/release/runtime package/ || echo "runtime not built"
+          cp target/${{ matrix.target }}/release/blockchain package/ || echo "blockchain not built"
+          cp target/${{ matrix.target }}/release/devnet package/ || echo "devnet not built"
+          cp target/${{ matrix.target }}/release/jobmanager package/ || echo "jobmanager not built"
+          cp target/${{ matrix.target }}/release/keygen package/ || echo "keygen not built"
+          cp target/${{ matrix.target }}/release/dashboard package/ || echo "dashboard not built"
+          cp target/${{ matrix.target }}/release/vm_test_runner package/ || echo "vm_test_runner not built"
+          tar -czf ${{ matrix.artifact }}.tar.gz -C package .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.tar.gz
+          body: |
+            ## BCAI Release ${{ github.ref_name }}
+            
+            ### Components Included:
+            - **runtime**: Core blockchain runtime
+            - **blockchain**: Blockchain operations
+            - **devnet**: Development network node
+            - **jobmanager**: Job management CLI  
+            - **keygen**: Key generation utility
+            - **dashboard**: Network dashboard
+            
+            ### Installation:
+            1. Download the appropriate archive for your platform
+            2. Extract: `tar -xzf <archive>.tar.gz`
+            3. Make executable: `chmod +x *`
+            4. Run: `./devnet --help` 
