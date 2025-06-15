@@ -13,7 +13,7 @@ path = "src/bin/dashboard.rs"
 
 [dependencies]
 tiny_http = "0.12"
-devnet = { path = "../devnet" }
+jobmanager = { path = "../jobmanager" }
 runtime = { path = "../runtime" }
 thiserror = "1"
 clap = { version = "4.0", features = ["derive"] }

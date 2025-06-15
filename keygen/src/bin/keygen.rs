@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
-use keygen_lib::{generate_keypair, Keypair};
+use keygen_lib::{generate_keypair, generate_ed25519_keypair};
 use sha2::Digest;
-use ed25519_dalek::Verifier;
+use ed25519_dalek::{Verifier, Keypair, Signer};
 use serde_json;
 use std::fs;
 use std::path::Path;
@@ -117,15 +117,16 @@ async fn generate_keys(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🔐 Generating new BCAI keypair...");
     
-    let keypair = generate_keypair();
+    let keypair_json = generate_keypair();
+    let _keypair = generate_ed25519_keypair();
     let key_name = name.unwrap_or_else(|| "bcai-key".to_string());
     
     // Save private key
     let private_key_data = serde_json::json!({
         "name": key_name,
         "type": "Ed25519",
-        "private_key": hex::encode(keypair.secret.to_bytes()),
-        "public_key": hex::encode(keypair.public.to_bytes()),
+        "private_key": keypair_json.secret,
+        "public_key": keypair_json.public,
         "created_at": chrono::Utc::now().to_rfc3339(),
         "version": "1.0"
     });
@@ -136,7 +137,7 @@ async fn generate_keys(
     let public_key_data = serde_json::json!({
         "name": key_name,
         "type": "Ed25519",
-        "public_key": hex::encode(keypair.public.to_bytes()),
+        "public_key": keypair_json.public,
         "created_at": chrono::Utc::now().to_rfc3339(),
         "version": "1.0"
     });
@@ -147,7 +148,7 @@ async fn generate_keys(
     println!("📄 Private key: {}", private_key_file);
     println!("📄 Public key: {}", public_key_file);
     println!("🏷️  Key name: {}", key_name);
-    println!("🔑 Public key (hex): {}", hex::encode(keypair.public.to_bytes()));
+    println!("🔑 Public key (hex): {}", keypair_json.public);
     
     println!();
     println!("⚠️  SECURITY WARNING:");
@@ -218,7 +219,7 @@ async fn sign_data(
         .ok_or("Invalid private key file format")?;
     
     let private_key_bytes = hex::decode(private_key_hex)?;
-    let keypair = Keypair::from_private_key_bytes(&private_key_bytes)?;
+    let keypair = Keypair::from_bytes(&private_key_bytes)?;
 
     // Sign the data
     let signature = keypair.sign(&data_to_sign);
@@ -238,7 +239,7 @@ async fn sign_data(
     println!("✅ Data signed successfully!");
     println!("📄 Signature file: {}", output);
     println!("🔏 Signature: {}", signature_hex);
-    println!("🔑 Public key: {}", hex::encode(keypair.public_key.to_bytes()));
+    println!("🔑 Public key: {}", hex::encode(keypair.public.to_bytes()));
 
     Ok(())
 }

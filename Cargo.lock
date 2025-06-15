@@ -976,7 +976,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "devnet",
+ "jobmanager",
  "runtime",
  "serde",
  "serde_json",

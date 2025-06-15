@@ -1,5 +1,4 @@
-use devnet::load_jobs;
-use devnet::Job;
+use jobmanager_lib::{load_jobs, Job};
 use tiny_http::{Response, Server};
 
 /// Render a list of jobs as simple HTML.
