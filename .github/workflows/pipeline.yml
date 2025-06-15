@@ -33,14 +33,55 @@ jobs:
             ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
             ${{ runner.os }}-cargo-
       
-      - name: Build runtime binaries
+      - name: Build all BCAI components
         run: |
-          echo "🔨 Building BCAI runtime binaries..."
+          echo "🔨 Building BCAI node components..."
           
           # Build runtime with no default features (for CI compatibility)
+          echo "📦 Building runtime..."
           cargo build --release --manifest-path runtime/Cargo.toml --no-default-features
           
-          echo "✅ Runtime build completed"
+          # Build other components with error handling
+          echo "📦 Building additional components..."
+          
+          # Try to build keygen
+          if cargo build --release --manifest-path keygen/Cargo.toml 2>/dev/null; then
+            echo "✅ keygen built successfully"
+          else
+            echo "⚠️ keygen build failed - skipping"
+          fi
+          
+          # Try to build jobmanager
+          if cargo build --release --manifest-path jobmanager/Cargo.toml 2>/dev/null; then
+            echo "✅ jobmanager built successfully"
+          else
+            echo "⚠️ jobmanager build failed - skipping"
+          fi
+          
+          # Try to build dashboard
+          if cargo build --release --manifest-path dashboard/Cargo.toml 2>/dev/null; then
+            echo "✅ dashboard built successfully"
+          else
+            echo "⚠️ dashboard build failed - skipping"
+          fi
+          
+          # Try to build devnet
+          if cargo build --release --manifest-path devnet/Cargo.toml 2>/dev/null; then
+            echo "✅ devnet built successfully"
+          else
+            echo "⚠️ devnet build failed - skipping"
+          fi
+          
+          # Try to build main CLI if it exists
+          if [ -f "src/main.rs" ] || [ -f "Cargo.toml" ]; then
+            if cargo build --release --bin bcai 2>/dev/null; then
+              echo "✅ main BCAI CLI built successfully"
+            else
+              echo "⚠️ main CLI build failed - skipping"
+            fi
+          fi
+          
+          echo "✅ Component builds completed (with any failures handled gracefully)"
       
       - name: Verify built binaries
         run: |
@@ -60,15 +101,31 @@ jobs:
           # Copy all built binaries to artifacts directory (more explicit)
           echo "📦 Packaging binaries..."
           
-          # Copy specific known binaries
-          for binary in blockchain runtime vm_test_runner; do
+          # Copy all essential binaries for a functional node
+          echo "📦 Packaging successfully built binaries..."
+          
+          # Essential binaries (must exist)
+          for binary in blockchain runtime; do
             if [ -f "target/release/$binary" ]; then
               cp "target/release/$binary" artifacts/
               # Get file size (Linux compatible)
               size=$(stat -c%s "target/release/$binary" 2>/dev/null || wc -c < "target/release/$binary" 2>/dev/null || echo "0")
               echo "✅ Packaged: $binary (${size} bytes)"
             else
-              echo "⚠️  Binary not found: $binary"
+              echo "❌ CRITICAL: Essential binary not found: $binary"
+              exit 1
+            fi
+          done
+          
+          # Optional binaries (include if they exist)
+          for binary in keygen jobmanager dashboard devnet bcai vm_test_runner; do
+            if [ -f "target/release/$binary" ]; then
+              cp "target/release/$binary" artifacts/
+              # Get file size (Linux compatible)
+              size=$(stat -c%s "target/release/$binary" 2>/dev/null || wc -c < "target/release/$binary" 2>/dev/null || echo "0")
+              echo "✅ Packaged: $binary (${size} bytes)"
+            else
+              echo "⚠️  Optional binary not found: $binary (skipping)"
             fi
           done
           
@@ -299,12 +356,84 @@ jobs:
           cp artifacts/* release/ 2>/dev/null || true
           
           # Restore executable permissions for binaries (lost during artifact transfer)
-          for binary in blockchain runtime vm_test_runner; do
-            if [ -f "release/$binary" ]; then
-              chmod +x "release/$binary"
-              echo "🔧 Restored executable permission: $binary"
+          echo "🔧 Restoring executable permissions..."
+          for file in release/*; do
+            if [ -f "$file" ] && [[ "$(basename "$file")" =~ ^(blockchain|runtime|keygen|jobmanager|dashboard|devnet|bcai|vm_test_runner)$ ]]; then
+              chmod +x "$file"
+              echo "🔧 Restored executable permission: $(basename "$file")"
             fi
           done
+          
+          # Add essential configuration and documentation files
+          echo "📄 Adding configuration and documentation..."
+          
+          # Add README and setup instructions
+          if [ -f "README.md" ]; then
+            cp "README.md" release/
+            echo "✅ Added README.md"
+          fi
+          
+          if [ -f "SETUP.md" ]; then
+            cp "SETUP.md" release/
+            echo "✅ Added SETUP.md"
+          fi
+          
+          # Add cargo configuration
+          if [ -f ".cargo/config.toml" ]; then
+            mkdir -p release/.cargo
+            cp ".cargo/config.toml" release/.cargo/
+            echo "✅ Added cargo configuration"
+          fi
+          
+          # Add Docker configuration
+          if [ -f "Dockerfile" ]; then
+            cp "Dockerfile" release/
+            echo "✅ Added Dockerfile"
+          fi
+          
+          if [ -f "docker-compose.yml" ]; then
+            cp "docker-compose.yml" release/
+            echo "✅ Added docker-compose.yml"
+          fi
+          
+          # Add example configurations
+          if [ -d "examples" ]; then
+            cp -r "examples" release/
+            echo "✅ Added examples directory"
+          fi
+          
+          # Add essential documentation
+          if [ -f "docs/README.md" ]; then
+            mkdir -p release/docs
+            cp "docs/README.md" release/docs/
+            echo "✅ Added docs/README.md"
+          fi
+          
+          if [ -f "docs/ENHANCED_VM_GUIDE.md" ]; then
+            mkdir -p release/docs
+            cp "docs/ENHANCED_VM_GUIDE.md" release/docs/
+            echo "✅ Added VM guide"
+          fi
+          
+          # Create a quick start script
+          echo '#!/bin/bash' > release/start-node.sh
+          echo 'echo "🚀 Starting BCAI Node..."' >> release/start-node.sh
+          echo 'echo "📊 Available components:"' >> release/start-node.sh
+          echo 'echo "  ./blockchain   - Blockchain runtime"' >> release/start-node.sh
+          echo 'echo "  ./runtime      - Core runtime engine"' >> release/start-node.sh
+          echo 'echo "  ./keygen       - Key generation utility"' >> release/start-node.sh
+          echo 'echo "  ./jobmanager   - Job management service"' >> release/start-node.sh
+          echo 'echo "  ./dashboard    - Web dashboard"' >> release/start-node.sh
+          echo 'echo "  ./devnet       - Development network"' >> release/start-node.sh
+          echo 'echo ""' >> release/start-node.sh
+          echo 'echo "💡 Quick start:"' >> release/start-node.sh
+          echo 'echo "  1. Generate keys: ./keygen --help"' >> release/start-node.sh
+          echo 'echo "  2. Start runtime: ./runtime --help"' >> release/start-node.sh
+          echo 'echo "  3. Launch dashboard: ./dashboard --help"' >> release/start-node.sh
+          echo 'echo ""' >> release/start-node.sh
+          echo 'echo "📖 See README.md for detailed setup instructions"' >> release/start-node.sh
+          chmod +x release/start-node.sh
+          echo "✅ Created start-node.sh script"
           
           # Remove non-binary files from release
           rm -f release/BUILD_MANIFEST.txt
