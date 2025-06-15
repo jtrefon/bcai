@@ -39,6 +39,14 @@ path = "bin/decentralized_storage_demo.rs"
 name = "permissions_demo"
 path = "bin/permissions_demo.rs"
 
+[[bin]]
+name = "timebound_permissions_demo"
+path = "bin/timebound_permissions_demo.rs"
+
+[[bin]]
+name = "timebound_permissions_simple_demo"
+path = "bin/timebound_permissions_simple_demo.rs"
+
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]

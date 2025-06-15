@@ -162,6 +162,44 @@ pub enum FilePermissions {
     Custom {
         access_list: HashMap<String, String>, // user_id -> encrypted_key
     },
+    /// Time-bound access - temporary permissions with expiration
+    TimeBound {
+        base_permissions: Box<FilePermissions>, // Underlying permission type
+        access_grants: Vec<TemporaryAccess>,    // List of temporary access grants
+        default_expiry: Option<DateTime<Utc>>,  // Default expiration for new grants
+    },
+}
+
+/// Temporary access grant with time constraints
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemporaryAccess {
+    pub user_id: String,
+    pub encrypted_key: String,
+    pub granted_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub access_type: TemporaryAccessType,
+    pub granted_by: String, // Who granted this access
+    pub usage_count: u64,   // How many times it's been used
+    pub max_usage: Option<u64>, // Optional usage limit
+}
+
+/// Types of temporary access
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum TemporaryAccessType {
+    ReadOnly,
+    ReadWrite, 
+    Trial,      // Limited trial access
+    Emergency,  // Emergency access (higher priority)
+    Subscription, // Subscription-based access
+}
+
+/// Time-bound access configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeBoundConfig {
+    pub max_grant_duration: Duration,     // Maximum duration for a single grant
+    pub max_concurrent_grants: u32,       // Maximum concurrent temporary grants
+    pub auto_cleanup_expired: bool,       // Automatically remove expired grants
+    pub grace_period: Duration,           // Grace period before hard expiration
 }
 
 /// Group management for file permissions
@@ -1422,6 +1460,217 @@ impl DecentralizedFilesystem {
         }
     }
 
+    /// Check enhanced file access permissions
+    async fn check_enhanced_file_access(&self, file: &DfsFile, requester: &str) -> Result<bool, DfsError> {
+        match &file.encryption_metadata.permissions {
+            FilePermissions::Public => Ok(true),
+            
+            FilePermissions::OwnerOnly { owner, .. } => {
+                Ok(owner == requester)
+            },
+            
+            FilePermissions::Group { group_id, members, .. } => {
+                // Check if requester is in group
+                if members.contains(&requester.to_string()) {
+                    return Ok(true);
+                }
+                
+                // Also check current group membership (in case it was updated)
+                let groups = self.permission_groups.read().await;
+                if let Some(group) = groups.get(group_id) {
+                    Ok(group.members.contains(&requester.to_string()) || group.owner == requester)
+                } else {
+                    Ok(false)
+                }
+            },
+            
+            FilePermissions::Custom { access_list } => {
+                Ok(access_list.contains_key(requester))
+            },
+
+            FilePermissions::TimeBound { base_permissions, access_grants, .. } => {
+                // First check if user has temporary access
+                for grant in access_grants {
+                    if grant.user_id == requester && self.is_temporary_access_valid(grant) {
+                        println!("⏰ Granted access via temporary {} access (expires: {})", 
+                                match grant.access_type {
+                                    TemporaryAccessType::ReadOnly => "read-only",
+                                    TemporaryAccessType::ReadWrite => "read-write",
+                                    TemporaryAccessType::Trial => "trial",
+                                    TemporaryAccessType::Emergency => "emergency",
+                                    TemporaryAccessType::Subscription => "subscription",
+                                },
+                                grant.expires_at.format("%Y-%m-%d %H:%M UTC"));
+                        return Ok(true);
+                    }
+                }
+
+                // If no valid temporary access, check base permissions
+                self.check_base_permissions(base_permissions, requester).await
+            },
+        }
+    }
+
+    /// Check base permissions (helper for time-bound permissions)
+    fn check_base_permissions<'a>(&'a self, permissions: &'a FilePermissions, requester: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool, DfsError>> + Send + 'a>> {
+        Box::pin(async move {
+            match permissions {
+                FilePermissions::Public => Ok(true),
+                FilePermissions::OwnerOnly { owner, .. } => Ok(owner == requester),
+                FilePermissions::Group { group_id, members, .. } => {
+                    if members.contains(&requester.to_string()) {
+                        return Ok(true);
+                    }
+                    let groups = self.permission_groups.read().await;
+                    if let Some(group) = groups.get(group_id) {
+                        Ok(group.members.contains(&requester.to_string()) || group.owner == requester)
+                    } else {
+                        Ok(false)
+                    }
+                },
+                FilePermissions::Custom { access_list } => Ok(access_list.contains_key(requester)),
+                FilePermissions::TimeBound { base_permissions, .. } => {
+                    // Recursive call for nested time-bound permissions
+                    self.check_base_permissions(base_permissions, requester).await
+                },
+            }
+        })
+    }
+
+    /// Retrieve file with permission checking and decryption (enhanced version)
+    pub async fn retrieve_file_with_permissions(
+        &self,
+        file_hash: String,
+        requester: String,
+    ) -> Result<Vec<u8>, DfsError> {
+        println!("🔍 Retrieving file with permission check: {}", file_hash);
+
+        // 1. Get file metadata
+        let dfs_file = {
+            let file_index = self.file_index.read().await;
+            file_index.get(&file_hash)
+                .ok_or_else(|| DfsError::FileNotFound(file_hash.clone()))?
+                .clone()
+        };
+
+        // 2. Check access permissions (including time-bound)
+        let access_granted = self.check_enhanced_file_access(&dfs_file, &requester).await?;
+        
+        if !access_granted {
+            return Err(DfsError::AccessDenied(
+                format!("User {} not authorized to access file {}", requester, file_hash)
+            ));
+        }
+
+        // 3. Retrieve encrypted data
+        let encrypted_data = self.assemble_file_parallel(&dfs_file).await?;
+
+        // 4. Decrypt if necessary
+        let decrypted_data = if dfs_file.encryption_metadata.is_encrypted {
+            // Get the appropriate decryption key for time-bound access
+            let decryption_key = self.get_decryption_key(&dfs_file.encryption_metadata, &requester).await?;
+            self.decrypt_file_data_with_key(&encrypted_data, &dfs_file.encryption_metadata, &decryption_key).await?
+        } else {
+            encrypted_data
+        };
+
+        // 5. Update access stats and usage count for temporary access
+        self.update_access_stats(&file_hash, &requester).await;
+
+        println!("✅ File retrieved and decrypted: {} bytes", decrypted_data.len());
+        Ok(decrypted_data)
+    }
+
+    /// Get appropriate decryption key based on permission type
+    async fn get_decryption_key(&self, metadata: &EncryptionMetadata, requester: &str) -> Result<String, DfsError> {
+        match &metadata.permissions {
+            FilePermissions::OwnerOnly { encrypted_key, .. } => Ok(encrypted_key.clone()),
+            FilePermissions::Group { group_id, .. } => {
+                let groups = self.permission_groups.read().await;
+                groups.get(group_id)
+                    .map(|g| g.group_key.clone())
+                    .ok_or_else(|| DfsError::GroupNotFound(group_id.clone()))
+            },
+            FilePermissions::TimeBound { base_permissions, access_grants, .. } => {
+                // First try temporary access key
+                for grant in access_grants {
+                    if grant.user_id == requester && self.is_temporary_access_valid(grant) {
+                        return Ok(grant.encrypted_key.clone());
+                    }
+                }
+                // Fall back to base permissions
+                self.get_base_decryption_key(base_permissions, requester).await
+            },
+            FilePermissions::Custom { access_list } => {
+                access_list.get(requester)
+                    .cloned()
+                    .ok_or_else(|| DfsError::AccessDenied("Key not found for user".to_string()))
+            },
+            FilePermissions::Public => Ok(String::new()), // No key needed for public
+        }
+    }
+
+    /// Get decryption key for base permissions
+    async fn get_base_decryption_key(&self, permissions: &FilePermissions, requester: &str) -> Result<String, DfsError> {
+        match permissions {
+            FilePermissions::OwnerOnly { encrypted_key, .. } => Ok(encrypted_key.clone()),
+            FilePermissions::Group { group_id, .. } => {
+                let groups = self.permission_groups.read().await;
+                groups.get(group_id)
+                    .map(|g| g.group_key.clone())
+                    .ok_or_else(|| DfsError::GroupNotFound(group_id.clone()))
+            },
+            FilePermissions::Custom { access_list } => {
+                access_list.get(requester)
+                    .cloned()
+                    .ok_or_else(|| DfsError::AccessDenied("Key not found for user".to_string()))
+            },
+            _ => Err(DfsError::AccessDenied("Cannot decrypt with these permissions".to_string())),
+        }
+    }
+
+    /// Decrypt file data with specific key
+    async fn decrypt_file_data_with_key(
+        &self,
+        encrypted_data: &[u8],
+        metadata: &EncryptionMetadata,
+        key: &str,
+    ) -> Result<Vec<u8>, DfsError> {
+        if !metadata.is_encrypted || key.is_empty() {
+            return Ok(encrypted_data.to_vec());
+        }
+
+        let nonce_bytes = metadata.nonce.as_ref()
+            .ok_or_else(|| DfsError::EncryptionError("Missing nonce".to_string()))?;
+        
+        let nonce = general_purpose::STANDARD.decode(nonce_bytes)
+            .map_err(|e| DfsError::EncryptionError(format!("Invalid nonce: {}", e)))?;
+
+        self.decrypt_with_symmetric_key(encrypted_data, key, &nonce)
+    }
+
+    /// Update access statistics and usage counters
+    async fn update_access_stats(&self, file_hash: &str, requester: &str) {
+        // Update file access stats
+        {
+            let mut file_index = self.file_index.write().await;
+            if let Some(file_mut) = file_index.get_mut(file_hash) {
+                file_mut.last_accessed = Utc::now();
+                file_mut.access_count += 1;
+
+                // Update usage count for temporary access
+                if let FilePermissions::TimeBound { access_grants, .. } = &mut file_mut.encryption_metadata.permissions {
+                    for grant in access_grants.iter_mut() {
+                        if grant.user_id == requester && self.is_temporary_access_valid(grant) {
+                            grant.usage_count += 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Encrypt data with symmetric key
     fn encrypt_with_symmetric_key(&self, data: &[u8], key_b64: &str) -> Result<(Vec<u8>, Vec<u8>), DfsError> {
         let key_bytes = general_purpose::STANDARD.decode(key_b64)
@@ -1435,6 +1684,21 @@ impl DecentralizedFilesystem {
             .map_err(|e| DfsError::EncryptionError(format!("Encryption failed: {}", e)))?;
 
         Ok((ciphertext, nonce.to_vec()))
+    }
+
+    /// Decrypt data with symmetric key
+    fn decrypt_with_symmetric_key(&self, data: &[u8], key_b64: &str, nonce: &[u8]) -> Result<Vec<u8>, DfsError> {
+        let key_bytes = general_purpose::STANDARD.decode(key_b64)
+            .map_err(|e| DfsError::EncryptionError(format!("Invalid key: {}", e)))?;
+        
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(key);
+        let nonce = Nonce::from_slice(nonce);
+        
+        let plaintext = cipher.decrypt(nonce, data)
+            .map_err(|e| DfsError::EncryptionError(format!("Decryption failed: {}", e)))?;
+            
+        Ok(plaintext)
     }
 
     /// Add a member to a permission group
@@ -1489,6 +1753,200 @@ impl DecentralizedFilesystem {
         println!("❌ Removed {} from group {}", member_to_remove, group_id);
 
         Ok(())
+    }
+
+    /// ============ TIME-BOUND PERMISSIONS SYSTEM ============
+
+    /// Grant temporary access to a file
+    pub async fn grant_temporary_access(
+        &self,
+        file_hash: String,
+        user_id: String,
+        access_type: TemporaryAccessType,
+        duration: Duration,
+        requester: String,
+        max_usage: Option<u64>,
+    ) -> Result<(), DfsError> {
+        let mut file_index = self.file_index.write().await;
+        let file = file_index.get_mut(&file_hash)
+            .ok_or_else(|| DfsError::FileNotFound(file_hash.clone()))?;
+
+        // Check if requester has permission to grant access
+        if !self.can_grant_access(&file.encryption_metadata.permissions, &requester) {
+            return Err(DfsError::AccessDenied(
+                "Insufficient permissions to grant access".to_string()
+            ));
+        }
+
+        let expires_at = Utc::now() + chrono::Duration::from_std(duration)
+            .map_err(|e| DfsError::KeyError(format!("Invalid duration: {}", e)))?;
+
+        // Generate temporary key
+        let temp_key = self.generate_symmetric_key()?;
+
+        let temp_access = TemporaryAccess {
+            user_id: user_id.clone(),
+            encrypted_key: temp_key,
+            granted_at: Utc::now(),
+            expires_at,
+            access_type,
+            granted_by: requester,
+            usage_count: 0,
+            max_usage,
+        };
+
+        // Convert to time-bound permissions if not already
+        let updated_permissions = match &file.encryption_metadata.permissions {
+            FilePermissions::TimeBound { base_permissions, access_grants, default_expiry } => {
+                let mut new_grants = access_grants.clone();
+                new_grants.push(temp_access);
+                FilePermissions::TimeBound {
+                    base_permissions: base_permissions.clone(),
+                    access_grants: new_grants,
+                    default_expiry: *default_expiry,
+                }
+            },
+            other => {
+                FilePermissions::TimeBound {
+                    base_permissions: Box::new(other.clone()),
+                    access_grants: vec![temp_access],
+                    default_expiry: Some(expires_at),
+                }
+            }
+        };
+
+        file.encryption_metadata.permissions = updated_permissions;
+
+        println!("⏰ Granted temporary {} access to {} for file {} (expires: {})", 
+                match access_type {
+                    TemporaryAccessType::ReadOnly => "read-only",
+                    TemporaryAccessType::ReadWrite => "read-write", 
+                    TemporaryAccessType::Trial => "trial",
+                    TemporaryAccessType::Emergency => "emergency",
+                    TemporaryAccessType::Subscription => "subscription",
+                },
+                user_id, file_hash, expires_at.format("%Y-%m-%d %H:%M UTC"));
+
+        Ok(())
+    }
+
+    /// Revoke temporary access before expiration
+    pub async fn revoke_temporary_access(
+        &self,
+        file_hash: String,
+        user_id: String,
+        requester: String,
+    ) -> Result<(), DfsError> {
+        let mut file_index = self.file_index.write().await;
+        let file = file_index.get_mut(&file_hash)
+            .ok_or_else(|| DfsError::FileNotFound(file_hash.clone()))?;
+
+        // Check if requester has permission to revoke access
+        if !self.can_grant_access(&file.encryption_metadata.permissions, &requester) {
+            return Err(DfsError::AccessDenied(
+                "Insufficient permissions to revoke access".to_string()
+            ));
+        }
+
+        if let FilePermissions::TimeBound { base_permissions, access_grants, default_expiry } = &file.encryption_metadata.permissions {
+            let updated_grants: Vec<TemporaryAccess> = access_grants.iter()
+                .filter(|grant| grant.user_id != user_id)
+                .cloned()
+                .collect();
+
+            file.encryption_metadata.permissions = FilePermissions::TimeBound {
+                base_permissions: base_permissions.clone(),
+                access_grants: updated_grants,
+                default_expiry: *default_expiry,
+            };
+
+            println!("🚫 Revoked temporary access for {} from file {}", user_id, file_hash);
+        }
+
+        Ok(())
+    }
+
+    /// Check if access is still valid (not expired, under usage limits)
+    fn is_temporary_access_valid(&self, temp_access: &TemporaryAccess) -> bool {
+        let now = Utc::now();
+        
+        // Check expiration
+        if now > temp_access.expires_at {
+            return false;
+        }
+
+        // Check usage limits
+        if let Some(max_usage) = temp_access.max_usage {
+            if temp_access.usage_count >= max_usage {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Cleanup expired temporary access grants
+    pub async fn cleanup_expired_access(&self) -> Result<u32, DfsError> {
+        let mut file_index = self.file_index.write().await;
+        let mut cleaned_count = 0u32;
+
+        for (file_hash, file) in file_index.iter_mut() {
+            if let FilePermissions::TimeBound { base_permissions, access_grants, default_expiry } = &file.encryption_metadata.permissions {
+                let initial_count = access_grants.len();
+                
+                let valid_grants: Vec<TemporaryAccess> = access_grants.iter()
+                    .filter(|grant| self.is_temporary_access_valid(grant))
+                    .cloned()
+                    .collect();
+
+                let removed_count = initial_count - valid_grants.len();
+                if removed_count > 0 {
+                    file.encryption_metadata.permissions = FilePermissions::TimeBound {
+                        base_permissions: base_permissions.clone(),
+                        access_grants: valid_grants,
+                        default_expiry: *default_expiry,
+                    };
+                    
+                    cleaned_count += removed_count as u32;
+                    println!("🧹 Cleaned {} expired grants from file {}", removed_count, file_hash);
+                }
+            }
+        }
+
+        if cleaned_count > 0 {
+            println!("✅ Cleanup complete: removed {} expired access grants", cleaned_count);
+        }
+
+        Ok(cleaned_count)
+    }
+
+    /// List all temporary access grants for a file
+    pub async fn list_temporary_access(&self, file_hash: String) -> Result<Vec<TemporaryAccess>, DfsError> {
+        let file_index = self.file_index.read().await;
+        let file = file_index.get(&file_hash)
+            .ok_or_else(|| DfsError::FileNotFound(file_hash))?;
+
+        if let FilePermissions::TimeBound { access_grants, .. } = &file.encryption_metadata.permissions {
+            Ok(access_grants.clone())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Check if a user can grant access (owner or admin)
+    fn can_grant_access(&self, permissions: &FilePermissions, requester: &str) -> bool {
+        match permissions {
+            FilePermissions::OwnerOnly { owner, .. } => owner == requester,
+            FilePermissions::Group { group_id, .. } => {
+                // In a real implementation, check if requester is group owner
+                true // Simplified for demo
+            },
+            FilePermissions::TimeBound { base_permissions, .. } => {
+                self.can_grant_access(base_permissions, requester)
+            },
+            FilePermissions::Public => false, // Can't grant access to public files
+            FilePermissions::Custom { .. } => false, // Simplified - could implement custom logic
+        }
     }
 }
 
