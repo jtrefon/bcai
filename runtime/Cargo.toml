@@ -55,6 +55,10 @@ metal = { version = "0.27", optional = true }
 wgpu = "0.19"
 bytemuck = { version = "1.14", features = ["derive"] }
 
+# Large data transfer dependencies
+lz4_flex = "0.11"
+crc32fast = "1.3"
+
 [dev-dependencies]
 criterion = "0.5"
 

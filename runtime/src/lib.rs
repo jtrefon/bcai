@@ -4,6 +4,7 @@
 
 // Basic VM modules (always available)
 pub mod instruction;
+pub mod large_data_transfer;
 pub mod vm;
 
 // Legacy/compatibility modules (commented out for CI build)
