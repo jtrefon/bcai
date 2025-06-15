@@ -11,9 +11,13 @@ path = "src/lib.rs"
 name = "runtime"
 path = "bin/runtime.rs"
 
-[[bin]] 
+[[bin]]
 name = "vm_test_runner"
 path = "bin/vm_test_runner.rs"
+
+[[bin]]
+name = "production_deploy"
+path = "bin/production_deploy.rs"
 
 [[bin]]
 name = "blockchain"

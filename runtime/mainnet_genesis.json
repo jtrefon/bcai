@@ -1,0 +1,79 @@
+{
+  "block": {
+    "difficulty": 65535,
+    "height": 0,
+    "merkle_root": "genesis_merkle_root",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "solution": {
+      "computation_time": 0,
+      "nonce": 0,
+      "result": []
+    },
+    "task": {
+      "a": [],
+      "b": [],
+      "challenge": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "data": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "difficulty": 1,
+      "target": "genesis",
+      "timestamp": 1750004211
+    },
+    "validator": "genesis"
+  },
+  "consensus": "proof_of_useful_work",
+  "features": {
+    "distributed_storage": true,
+    "enhanced_vm": true,
+    "hardware_acceleration": true,
+    "ml_instructions": true,
+    "python_bridge": true,
+    "smart_contracts": true
+  },
+  "initial_allocations": [
+    {
+      "account": "treasury",
+      "amount": 6300000,
+      "type": "allocation"
+    },
+    {
+      "account": "foundation",
+      "amount": 3150000,
+      "type": "allocation"
+    },
+    {
+      "account": "early_contributors",
+      "amount": 4200000,
+      "type": "allocation"
+    },
+    {
+      "account": "public_sale",
+      "amount": 5250000,
+      "type": "allocation"
+    },
+    {
+      "account": "ecosystem_fund",
+      "amount": 2100000,
+      "type": "allocation"
+    }
+  ],
+  "network": "mainnet",
+  "network_config": {
+    "max_transactions_per_block": 1000,
+    "minimum_stake": 1000,
+    "reward_rate": 0.15,
+    "staking_enabled": true,
+    "target_block_time": 60
+  },
+  "timestamp": 1750004211,
+  "version": "1.0.0"
+}

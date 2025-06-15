@@ -3,6 +3,75 @@ use std::collections::HashMap;
 use std::fs;
 use thiserror::Error;
 
+// === Core Configuration ===
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevnetConfig {
+    pub node_count: u32,
+    pub ai_workers: u32,
+    pub initial_tokens: u64,
+    pub port_base: u16,
+}
+
+impl Default for DevnetConfig {
+    fn default() -> Self {
+        Self {
+            node_count: 3,
+            ai_workers: 1,
+            initial_tokens: 1000,
+            port_base: 8000,
+        }
+    }
+}
+
+// === Devnet Node Startup ===
+pub async fn start_devnet_node(config: DevnetConfig) -> Result<(), DevnetError> {
+    println!("🚀 Starting BCAI Devnet with config: {:?}", config);
+    
+    // Initialize ledger with treasury and initial allocations
+    let mut ledger = load_ledger()?;
+    mint(&mut ledger, TREASURY, config.initial_tokens * 10); // Treasury gets 10x
+    
+    // Create initial nodes
+    for i in 0..config.node_count {
+        let node_id = format!("node_{}", i);
+        mint(&mut ledger, &node_id, config.initial_tokens);
+        println!("✅ Created node: {} with {} tokens", node_id, config.initial_tokens);
+    }
+    
+    // Create AI workers
+    for i in 0..config.ai_workers {
+        let worker_id = format!("ai_worker_{}", i);
+        mint(&mut ledger, &worker_id, config.initial_tokens / 2);
+        println!("🤖 Created AI worker: {} with {} tokens", worker_id, config.initial_tokens / 2);
+    }
+    
+    save_ledger(&ledger)?;
+    
+    // Initialize jobs
+    let mut jobs = load_jobs()?;
+    
+    // Create sample training job
+    post_job(
+        &mut jobs, 
+        &mut ledger, 
+        TREASURY, 
+        "Sample neural network training task".to_string(), 
+        100
+    )?;
+    
+    save_jobs(&jobs)?;
+    save_ledger(&ledger)?;
+    
+    println!("🎉 Devnet initialized successfully!");
+    println!("📊 Total nodes: {}, AI workers: {}", config.node_count, config.ai_workers);
+    println!("💰 Treasury balance: {}", ledger.balance(TREASURY));
+    println!("📝 Available jobs: {}", jobs.len());
+    
+    Ok(())
+}
+
+// === Existing Types and Functions ===
+
 // Simplified types for devnet
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
@@ -63,6 +132,10 @@ pub enum DevnetError {
     Io(#[from] std::io::Error),
     #[error("Serialization error: {0}")]
     Serde(#[from] serde_json::Error),
+    #[error("Job manager error: {0}")]
+    JobManager(#[from] JobManagerError),
+    #[error("Ledger error: {0}")]
+    Ledger(#[from] LedgerError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
