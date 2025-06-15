@@ -64,7 +64,9 @@ jobs:
           for binary in blockchain runtime vm_test_runner; do
             if [ -f "target/release/$binary" ]; then
               cp "target/release/$binary" artifacts/
-              echo "✅ Packaged: $binary ($(stat -f%z target/release/$binary) bytes)"
+              # Get file size (Linux compatible)
+              size=$(stat -c%s "target/release/$binary" 2>/dev/null || wc -c < "target/release/$binary" 2>/dev/null || echo "0")
+              echo "✅ Packaged: $binary (${size} bytes)"
             else
               echo "⚠️  Binary not found: $binary"
             fi
@@ -75,7 +77,9 @@ jobs:
             binary_name=$(basename "$binary")
             if [ ! -f "artifacts/$binary_name" ]; then
               cp "$binary" artifacts/
-              echo "📦 Additional binary: $binary_name ($(stat -f%z "$binary") bytes)"
+              # Get file size (Linux compatible)
+              size=$(stat -c%s "$binary" 2>/dev/null || wc -c < "$binary" 2>/dev/null || echo "0")
+              echo "📦 Additional binary: $binary_name (${size} bytes)"
             fi
           done
           
@@ -92,8 +96,10 @@ jobs:
           echo "" >> artifacts/BUILD_MANIFEST.txt
           echo "=== Binary Details ===" >> artifacts/BUILD_MANIFEST.txt
           for binary in artifacts/*; do
-            if [ -x "$binary" ] && [ -f "$binary" ]; then
-              echo "$(basename $binary): $(stat -f%z "$binary") bytes" >> artifacts/BUILD_MANIFEST.txt
+            if [ -f "$binary" ] && [ "$(basename "$binary")" != "BUILD_MANIFEST.txt" ]; then
+              # Get file size (Linux compatible)
+              size=$(stat -c%s "$binary" 2>/dev/null || wc -c < "$binary" 2>/dev/null || echo "0")
+              echo "$(basename $binary): ${size} bytes" >> artifacts/BUILD_MANIFEST.txt
             fi
           done
           
@@ -289,8 +295,16 @@ jobs:
           # Create release directory
           mkdir -p release
           
-          # Copy all files from artifacts
+          # Copy all files from artifacts and restore executable permissions
           cp artifacts/* release/ 2>/dev/null || true
+          
+          # Restore executable permissions for binaries (lost during artifact transfer)
+          for binary in blockchain runtime vm_test_runner; do
+            if [ -f "release/$binary" ]; then
+              chmod +x "release/$binary"
+              echo "🔧 Restored executable permission: $binary"
+            fi
+          done
           
           # Remove non-binary files from release
           rm -f release/BUILD_MANIFEST.txt
@@ -303,11 +317,18 @@ jobs:
           binary_count=0
           total_size=0
           for file in release/*; do
-            if [ -f "$file" ] && [ -x "$file" ]; then
-              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
-              echo "✅ Binary: $(basename $file) - ${size} bytes"
-              binary_count=$((binary_count + 1))
-              total_size=$((total_size + size))
+            if [ -f "$file" ]; then
+              # Get file size (Linux compatible)
+              size=$(stat -c%s "$file" 2>/dev/null || wc -c < "$file" 2>/dev/null || echo "0")
+              
+              # Check if it's a binary file (not just executable bit)
+              if file "$file" | grep -q "executable\|ELF"; then
+                echo "✅ Binary: $(basename $file) - ${size} bytes"
+                binary_count=$((binary_count + 1))
+                total_size=$((total_size + size))
+              else
+                echo "📄 File: $(basename $file) - ${size} bytes (not binary)"
+              fi
             fi
           done
           
@@ -316,6 +337,12 @@ jobs:
           
           if [ $binary_count -eq 0 ]; then
             echo "❌ ERROR: No binaries found in release package!"
+            echo "🔍 Debug: Files in release directory:"
+            for file in release/*; do
+              if [ -f "$file" ]; then
+                echo "  - $(basename $file): $(file "$file")"
+              fi
+            done
             exit 1
           fi
       
