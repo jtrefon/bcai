@@ -47,6 +47,10 @@ path = "bin/timebound_permissions_demo.rs"
 name = "timebound_permissions_simple_demo"
 path = "bin/timebound_permissions_simple_demo.rs"
 
+[[bin]]
+name = "cross_chain_bridge_demo"
+path = "bin/cross_chain_bridge_demo.rs"
+
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]
