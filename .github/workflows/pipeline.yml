@@ -57,19 +57,48 @@ jobs:
         run: |
           mkdir -p artifacts
           
-          # Copy all built binaries to artifacts directory
-          find target/release -maxdepth 1 -type f -executable | grep -v '\.d$' | while read binary; do
-            if [ -f "$binary" ]; then
-              cp "$binary" artifacts/
-              echo "📦 Packaged: $(basename $binary)"
+          # Copy all built binaries to artifacts directory (more explicit)
+          echo "📦 Packaging binaries..."
+          
+          # Copy specific known binaries
+          for binary in blockchain runtime vm_test_runner; do
+            if [ -f "target/release/$binary" ]; then
+              cp "target/release/$binary" artifacts/
+              echo "✅ Packaged: $binary ($(stat -f%z target/release/$binary) bytes)"
+            else
+              echo "⚠️  Binary not found: $binary"
             fi
           done
           
-          # Create a manifest of what was built
-          ls -la artifacts/ > artifacts/BUILD_MANIFEST.txt
-          echo "build-timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> artifacts/BUILD_MANIFEST.txt
-          echo "git-sha=${{ github.sha }}" >> artifacts/BUILD_MANIFEST.txt
-          echo "branch=${{ github.ref_name }}" >> artifacts/BUILD_MANIFEST.txt
+          # Copy any other executables we might have missed
+          find target/release -maxdepth 1 -type f -executable | grep -v '\.d$' | while read binary; do
+            binary_name=$(basename "$binary")
+            if [ ! -f "artifacts/$binary_name" ]; then
+              cp "$binary" artifacts/
+              echo "📦 Additional binary: $binary_name ($(stat -f%z "$binary") bytes)"
+            fi
+          done
+          
+          # Create a detailed manifest
+          echo "📊 Creating build manifest..."
+          echo "=== BCAI Build Manifest ===" > artifacts/BUILD_MANIFEST.txt
+          echo "Build timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> artifacts/BUILD_MANIFEST.txt
+          echo "Git SHA: ${{ github.sha }}" >> artifacts/BUILD_MANIFEST.txt
+          echo "Branch: ${{ github.ref_name }}" >> artifacts/BUILD_MANIFEST.txt
+          echo "Build host: $(uname -a)" >> artifacts/BUILD_MANIFEST.txt
+          echo "" >> artifacts/BUILD_MANIFEST.txt
+          echo "=== Packaged Binaries ===" >> artifacts/BUILD_MANIFEST.txt
+          ls -la artifacts/ | grep -v BUILD_MANIFEST >> artifacts/BUILD_MANIFEST.txt
+          echo "" >> artifacts/BUILD_MANIFEST.txt
+          echo "=== Binary Details ===" >> artifacts/BUILD_MANIFEST.txt
+          for binary in artifacts/*; do
+            if [ -x "$binary" ] && [ -f "$binary" ]; then
+              echo "$(basename $binary): $(stat -f%z "$binary") bytes" >> artifacts/BUILD_MANIFEST.txt
+            fi
+          done
+          
+          echo "📦 Artifact summary:"
+          cat artifacts/BUILD_MANIFEST.txt
           
           echo "name=bcai-binaries-${{ github.sha }}" >> $GITHUB_OUTPUT
       
@@ -245,8 +274,22 @@ jobs:
         run: |
           echo "📦 Preparing release package..."
           
+          # Debug: Show what we downloaded
+          echo "🔍 Downloaded artifacts:"
+          ls -la artifacts/
+          echo ""
+          
+          # Show manifest if it exists
+          if [ -f "artifacts/BUILD_MANIFEST.txt" ]; then
+            echo "📋 Build manifest:"
+            cat artifacts/BUILD_MANIFEST.txt
+            echo ""
+          fi
+          
           # Create release directory
           mkdir -p release
+          
+          # Copy all files from artifacts
           cp artifacts/* release/ 2>/dev/null || true
           
           # Remove non-binary files from release
@@ -254,21 +297,49 @@ jobs:
           
           echo "🚀 Release contents:"
           ls -la release/
+          echo ""
+          
+          # Verify we have actual binaries
+          binary_count=0
+          total_size=0
+          for file in release/*; do
+            if [ -f "$file" ] && [ -x "$file" ]; then
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
+              echo "✅ Binary: $(basename $file) - ${size} bytes"
+              binary_count=$((binary_count + 1))
+              total_size=$((total_size + size))
+            fi
+          done
+          
+          echo ""
+          echo "📊 Release summary: $binary_count binaries, $total_size total bytes"
+          
+          if [ $binary_count -eq 0 ]; then
+            echo "❌ ERROR: No binaries found in release package!"
+            exit 1
+          fi
       
       - name: Create release archive
         run: |
+          # Create safe filename by replacing problematic characters
+          SAFE_BRANCH=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/_/g')
+          ARCHIVE_NAME="bcai-${SAFE_BRANCH}-${{ github.sha }}.tar.gz"
+          
           cd release
-          tar -czf ../bcai-${{ github.ref_name }}-${{ github.sha }}.tar.gz *
+          tar -czf "../${ARCHIVE_NAME}" *
           cd ..
           
           echo "📦 Release archive created:"
-          ls -la bcai-${{ github.ref_name }}-${{ github.sha }}.tar.gz
+          ls -la "${ARCHIVE_NAME}"
+          
+          # Store archive name for next step
+          echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
       
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bcai-release-${{ github.ref_name }}-${{ github.sha }}
-          path: bcai-${{ github.ref_name }}-${{ github.sha }}.tar.gz
+          name: bcai-release-${{ github.sha }}
+          path: ${{ env.ARCHIVE_NAME }}
           retention-days: 90
       
       - name: Publish summary
