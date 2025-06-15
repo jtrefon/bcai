@@ -2,18 +2,17 @@
 //! 
 //! This runtime provides both basic VM functionality and enhanced ML capabilities.
 
-// Basic VM modules (always available)
+// Core modules (always available and working)
 pub mod instruction;
 pub mod large_data_transfer;
 pub mod vm;
+pub mod enhanced_p2p_service;
 
-// Legacy/compatibility modules (commented out for CI build)
-// pub mod token;
-// pub mod pouw;
-// pub mod network;
-// pub mod node;
-// pub mod monitoring;
-// pub mod security;
+// Phase 3: Storage Integration & Advanced Features
+pub mod distributed_storage;
+pub mod consensus_engine;
+pub mod security_layer;
+pub mod performance_optimizer;
 
 // Enhanced VM modules (optional, behind enhanced-vm feature)
 #[cfg(feature = "enhanced-vm")]
@@ -26,6 +25,10 @@ pub mod tensor_ops;
 pub mod hardware_abstraction;
 #[cfg(feature = "enhanced-vm")]
 pub mod python_bridge;
+
+// Working additional modules
+pub mod token;
+pub mod pouw;
 
 // Re-export core types
 pub use instruction::Instruction;
@@ -43,87 +46,48 @@ pub use python_bridge::PythonConstraints;
 #[cfg(feature = "enhanced-vm")]
 pub use hardware_abstraction::HardwareBackend;
 
-// Legacy stub types for compatibility (minimal implementations)
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum LedgerError {
-    #[error("insufficient balance")]
-    InsufficientBalance,
-}
+// Re-export working modules
+pub use token::{TokenLedger, LedgerError};
+pub use pouw::{Task, generate_task, solve, verify};
 
-#[derive(Debug, Clone, Default)]
-pub struct TokenLedger;
-
-impl TokenLedger {
-    pub fn new() -> Self { Self }
-    pub fn mint(&mut self, _account: &str, _amount: u64) -> Result<(), LedgerError> { Ok(()) }
-    pub fn transfer(&mut self, _from: &str, _to: &str, _amount: u64) -> Result<(), LedgerError> { Ok(()) }
-    pub fn balance(&self, _account: &str) -> u64 { 0 }
-}
-
+// Stub types for enhanced_p2p_service compatibility
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Task {
-    pub difficulty: u64,
-    pub data: Vec<u8>,
-    pub target: String,
+pub enum NetworkMessage {
+    Ping,
+    Pong,
+    Data(Vec<u8>),
 }
-
-pub fn generate_task(difficulty: u64) -> Task {
-    Task { difficulty, data: vec![1, 2, 3, 4], target: format!("target_{}", difficulty) }
-}
-
-pub fn solve(task: &Task) -> Option<u64> {
-    if task.difficulty <= 100 { Some(42) } else { None }
-}
-
-pub fn verify(task: &Task, nonce: u64) -> bool {
-    nonce == 42 && task.difficulty <= 100
-}
-
-// Stub types for other modules
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum NetworkMessage { Ping, Pong }
 
 #[derive(Debug, Clone)]
-pub struct NetworkCoordinator;
+pub struct NetworkCoordinator {
+    pub node_id: String,
+}
 
 impl NetworkCoordinator {
-    pub fn new(_node_id: String) -> Self { Self }
+    pub fn new(node_id: String) -> Self {
+        Self { node_id }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum NodeCapability { BasicCompute }
+pub enum NodeCapability {
+    BasicCompute,
+    Training,
+    Inference,
+    Storage,
+}
 
 #[derive(Debug, Clone)]
-pub struct UnifiedNode;
+pub struct UnifiedNode {
+    pub node_id: String,
+    pub capability: NodeCapability,
+}
 
 impl UnifiedNode {
-    pub fn new(_node_id: String, _capability: NodeCapability) -> Self { Self }
+    pub fn new(node_id: String, capability: NodeCapability) -> Self {
+        Self { node_id, capability }
+    }
 }
-
-// Additional stub types
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum AlertSeverity { Info }
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum HealthStatus { Healthy }
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MonitoringConfig;
-
-#[derive(Debug, Clone)]
-pub struct MonitoringSystem;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AuthCredentials { pub username: String, pub token: String }
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct RateLimitConfig;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum SecurityLevel { Low }
-
-#[derive(Debug, Clone)]
-pub struct SecurityManager;
 
 // Basic types (always available)
 /// Tensor identifier for referencing tensors in VM
@@ -151,15 +115,20 @@ pub enum DataType {
     String,
 }
 
-// Enhanced types (conditionally available)
-#[cfg(feature = "enhanced-vm")]
-pub use enhanced_vm::VmConfig;
-
-#[cfg(not(feature = "enhanced-vm"))]
+/// VM Configuration
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VmConfig {
     pub max_stack_size: usize,
     pub max_memory_size: usize,
+}
+
+impl Default for VmConfig {
+    fn default() -> Self {
+        Self {
+            max_stack_size: 1024,
+            max_memory_size: 1024 * 1024, // 1MB
+        }
+    }
 }
 
 // Simple blockchain types for compatibility
