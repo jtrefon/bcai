@@ -17,12 +17,14 @@ pub mod protocol;
 pub mod cache;
 pub mod compression;
 pub mod crypto;
+pub mod network_integration;
 
 // Re-export core types
 pub use chunk::{DataChunk, ChunkId, ChunkInfo};
 pub use descriptor::{LargeDataDescriptor, TransferMetadata};
 pub use manager::{ChunkManager, ChunkManagerConfig};
 pub use protocol::{TransferMessage, TransferState, TransferError};
+pub use network_integration::{NetworkTransferCoordinator, NetworkPeerInfo, NetworkStats};
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

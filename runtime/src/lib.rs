@@ -216,3 +216,6 @@ impl Default for Blockchain {
         Self::new()
     }
 }
+
+// Phase 2 enhanced modules
+pub mod enhanced_p2p_service;

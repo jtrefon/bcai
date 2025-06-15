@@ -59,6 +59,12 @@ bytemuck = { version = "1.14", features = ["derive"] }
 lz4_flex = "0.11"
 crc32fast = "1.3"
 
+# Phase 2: Network Protocol Enhancement dependencies
+futures = "0.3"
+bytes = "1.5"
+dashmap = "5.5"
+tokio-util = { version = "0.7", features = ["codec"] }
+
 [dev-dependencies]
 criterion = "0.5"
 
