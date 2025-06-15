@@ -24,6 +24,11 @@ use thiserror::Error;
 use chrono::{DateTime, Utc};
 use rand;
 
+// Add encryption and security imports
+use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit, aead::{Aead, OsRng, AeadCore}};
+use sha2::{Sha256, Digest};
+use base64::{Engine as _, engine::general_purpose};
+
 /// Decentralized filesystem errors
 #[derive(Debug, Error)]
 pub enum DfsError {
@@ -41,6 +46,16 @@ pub enum DfsError {
     NetworkError(String),
     #[error("Insufficient funds: need {required}, have {available}")]
     InsufficientFunds { required: u64, available: u64 },
+    #[error("Access denied: {0}")]
+    AccessDenied(String),
+    #[error("Encryption error: {0}")]
+    EncryptionError(String),
+    #[error("Key management error: {0}")]
+    KeyError(String),
+    #[error("Group not found: {0}")]
+    GroupNotFound(String),
+    #[error("User not found: {0}")]
+    UserNotFound(String),
 }
 
 /// Configuration for decentralized filesystem
@@ -106,8 +121,10 @@ pub struct DfsFile {
     pub access_count: u64,
     /// Tags for categorization
     pub tags: Vec<String>,
-    /// File visibility (public, private, shared)
+    /// File visibility (deprecated - use encryption_metadata.permissions)
     pub visibility: FileVisibility,
+    /// Encryption and permission metadata
+    pub encryption_metadata: EncryptionMetadata,
 }
 
 /// Chunk information within a file
@@ -125,12 +142,103 @@ pub struct DfsChunk {
     pub verified_at: DateTime<Utc>,
 }
 
-/// File visibility levels
+/// File access permissions with encryption support
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FilePermissions {
+    /// Public access - no encryption, anyone can read
+    Public,
+    /// Owner-only access - encrypted with owner's key
+    OwnerOnly { 
+        owner: String,
+        encrypted_key: String, // AES key encrypted with owner's public key
+    },
+    /// Group access - encrypted with shared group key
+    Group { 
+        group_id: String,
+        encrypted_key: String, // AES key encrypted with group's shared key
+        members: Vec<String>,   // List of authorized group members
+    },
+    /// Custom access list - encrypted with individual keys per user
+    Custom {
+        access_list: HashMap<String, String>, // user_id -> encrypted_key
+    },
+}
+
+/// Group management for file permissions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PermissionGroup {
+    pub group_id: String,
+    pub name: String,
+    pub description: String,
+    pub owner: String,
+    pub members: Vec<String>,
+    pub group_key: String, // Base64 encoded group key
+    pub created_at: DateTime<Utc>,
+    pub last_modified: DateTime<Utc>,
+    pub permissions: GroupPermissions,
+}
+
+/// Group permission levels
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GroupPermissions {
+    Read,      // Can only read files
+    ReadWrite, // Can read and add files to group
+    Admin,     // Can manage group membership
+}
+
+/// User key management for encryption
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserKeyPair {
+    pub user_id: String,
+    pub public_key: String,  // Base64 encoded public key
+    pub private_key: String, // Base64 encoded private key (should be client-side only)
+    pub created_at: DateTime<Utc>,
+}
+
+/// Encryption metadata stored with file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptionMetadata {
+    pub is_encrypted: bool,
+    pub encryption_algorithm: String, // "AES-256-GCM" for encrypted files
+    pub nonce: Option<String>,        // Base64 encoded nonce for AES-GCM
+    pub permissions: FilePermissions,
+}
+
+/// Access audit log entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessLogEntry {
+    pub file_hash: String,
+    pub requester: String,
+    pub access_time: DateTime<Utc>,
+    pub access_granted: bool,
+    pub reason: String, // Success reason or denial reason
+}
+
+/// File visibility levels (deprecated - use FilePermissions instead)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum FileVisibility {
-    Public,    // Anyone can access
-    Private,   // Only owner can access
-    Shared(Vec<String>), // Specific accounts can access
+    Public,
+    Private,
+    Shared(Vec<String>),
+}
+
+impl From<FileVisibility> for FilePermissions {
+    fn from(visibility: FileVisibility) -> Self {
+        match visibility {
+            FileVisibility::Public => FilePermissions::Public,
+            FileVisibility::Private => FilePermissions::OwnerOnly { 
+                owner: "unknown".to_string(), 
+                encrypted_key: String::new() 
+            },
+            FileVisibility::Shared(users) => {
+                let mut access_list = HashMap::new();
+                for user in users {
+                    access_list.insert(user, String::new());
+                }
+                FilePermissions::Custom { access_list }
+            }
+        }
+    }
 }
 
 /// Storage contract for economic incentives
@@ -255,6 +363,11 @@ pub struct DecentralizedFilesystem {
     // Statistics
     assembly_stats: Arc<AsyncRwLock<AssemblyStats>>,
     
+    // Permission and encryption management
+    permission_groups: Arc<AsyncRwLock<HashMap<String, PermissionGroup>>>,
+    user_keys: Arc<AsyncRwLock<HashMap<String, UserKeyPair>>>,
+    access_log: Arc<AsyncRwLock<Vec<AccessLogEntry>>>,
+    
     // Event channels
     event_sender: mpsc::UnboundedSender<DfsEvent>,
 }
@@ -302,6 +415,9 @@ impl DecentralizedFilesystem {
                 cache_hit_rate: 0.0,
                 parallel_efficiency: 0.0,
             })),
+            permission_groups: Arc::new(AsyncRwLock::new(HashMap::new())),
+            user_keys: Arc::new(AsyncRwLock::new(HashMap::new())),
+            access_log: Arc::new(AsyncRwLock::new(Vec::new())),
             event_sender,
         }
     }
@@ -379,7 +495,13 @@ impl DecentralizedFilesystem {
             last_accessed: Utc::now(),
             access_count: 0,
             tags,
-            visibility,
+            visibility: visibility.clone(),
+            encryption_metadata: EncryptionMetadata {
+                is_encrypted: false, // Will be updated based on permissions
+                encryption_algorithm: "none".to_string(),
+                nonce: None,
+                permissions: visibility.into(),
+            },
         };
 
         // 8. Register file in index
@@ -1084,6 +1206,144 @@ impl DecentralizedFilesystem {
         }
     }
 
+    /// ============ ENHANCED PERMISSION & ENCRYPTION SYSTEM ============
+
+    /// Create a new permission group for file access control
+    pub async fn create_permission_group(
+        &self,
+        group_id: String,
+        name: String,
+        description: String,
+        owner: String,
+        initial_members: Vec<String>,
+        permissions: GroupPermissions,
+    ) -> Result<(), DfsError> {
+        // Generate a random group key for encryption
+        let group_key = self.generate_group_key()?;
+        
+        let group = PermissionGroup {
+            group_id: group_id.clone(),
+            name,
+            description,
+            owner,
+            members: initial_members,
+            group_key,
+            created_at: Utc::now(),
+            last_modified: Utc::now(),
+            permissions,
+        };
+
+        {
+            let mut groups = self.permission_groups.write().await;
+            groups.insert(group_id.clone(), group);
+        }
+
+        println!("🔐 Created permission group: {}", group_id);
+        Ok(())
+    }
+
+    /// Generate a symmetric encryption key
+    fn generate_symmetric_key(&self) -> Result<String, DfsError> {
+        let key = Aes256Gcm::generate_key(&mut OsRng);
+        Ok(general_purpose::STANDARD.encode(&key))
+    }
+
+    /// Generate a group key
+    fn generate_group_key(&self) -> Result<String, DfsError> {
+        self.generate_symmetric_key()
+    }
+
+    /// Store file with enhanced permissions (NEW METHOD)
+    pub async fn store_file_with_permissions(
+        &self,
+        filename: String,
+        data: Vec<u8>,
+        content_type: String,
+        owner: String,
+        permissions: FilePermissions,
+        storage_duration_hours: u64,
+        tags: Vec<String>,
+    ) -> Result<String, DfsError> {
+        println!("🔐 Storing file with enhanced permissions: {} ({} bytes)", filename, data.len());
+
+        // 1. Encrypt data based on permissions
+        let (encrypted_data, encryption_metadata) = self.encrypt_file_data(&data, &permissions, &owner).await?;
+
+        // 2. Use encrypted data for storage (rest of process same as before)
+        let file_hash = self.calculate_file_hash(&encrypted_data);
+        let chunks = self.create_chunks(&encrypted_data, &file_hash).await?;
+        
+        // 3. Calculate storage costs
+        let file_size_gb = encrypted_data.len() as f64 / (1024.0 * 1024.0 * 1024.0);
+        let storage_cost = (file_size_gb * self.config.storage_price_per_gb_month as f64 
+                           * storage_duration_hours as f64 / (24.0 * 30.0)) as u64;
+        let total_cost = storage_cost * self.config.default_replication as u64;
+
+        println!("💰 Storage cost: {} BCAI for {:.3} GB, {} hours", 
+                total_cost, file_size_gb, storage_duration_hours);
+
+        // 4. Check if owner has sufficient funds
+        let owner_balance = {
+            let ledger = self.token_ledger.read().await;
+            ledger.balance(&owner)
+        };
+
+        if owner_balance < total_cost {
+            return Err(DfsError::InsufficientFunds {
+                required: total_cost,
+                available: owner_balance,
+            });
+        }
+
+        // 5. Select storage nodes
+        let storage_nodes = self.select_storage_nodes(
+            encrypted_data.len() as u64,
+            self.config.default_replication,
+        ).await?;
+
+        // 6. Create storage contract
+        let contract_id = format!("storage_{}_{}", file_hash, Utc::now().timestamp());
+        let _storage_contract = self.create_storage_contract(
+            contract_id.clone(),
+            file_hash.clone(),
+            storage_nodes.clone(),
+            owner.clone(),
+            total_cost,
+            storage_duration_hours,
+        ).await?;
+
+        // 7. Store chunks
+        let dfs_chunks = self.distribute_chunks(&chunks, &storage_nodes).await?;
+
+        // 8. Create file metadata with encryption info
+        let dfs_file = DfsFile {
+            file_hash: file_hash.clone(),
+            filename,
+            size: data.len() as u64, // Original size, not encrypted size
+            content_type,
+            owner,
+            storage_contracts: vec![contract_id.clone()],
+            chunks: dfs_chunks,
+            replication: self.config.default_replication,
+            created_at: Utc::now(),
+            last_accessed: Utc::now(),
+            access_count: 0,
+            tags,
+            visibility: FileVisibility::Private, // Deprecated field
+            encryption_metadata,
+        };
+
+        // 9. Register file
+        {
+            let mut file_index = self.file_index.write().await;
+            file_index.insert(file_hash.clone(), dfs_file);
+        }
+
+        println!("✅ File stored with encryption: {}", file_hash);
+        
+        Ok(file_hash)
+    }
+
     /// Get filesystem statistics
     pub async fn get_statistics(&self) -> DfsStatistics {
         let file_index = self.file_index.read().await;
@@ -1111,6 +1371,124 @@ impl DecentralizedFilesystem {
                 0.0
             },
         }
+    }
+
+    /// Encrypt file data based on permissions
+    async fn encrypt_file_data(
+        &self, 
+        data: &[u8], 
+        permissions: &FilePermissions, 
+        _owner: &str
+    ) -> Result<(Vec<u8>, EncryptionMetadata), DfsError> {
+        match permissions {
+            FilePermissions::Public => {
+                // No encryption for public files
+                Ok((data.to_vec(), EncryptionMetadata {
+                    is_encrypted: false,
+                    encryption_algorithm: "none".to_string(),
+                    nonce: None,
+                    permissions: permissions.clone(),
+                }))
+            },
+            
+            FilePermissions::OwnerOnly { owner: perm_owner, .. } => {
+                // Encrypt with owner's key
+                let key = self.generate_symmetric_key()?;
+                let (encrypted_data, nonce) = self.encrypt_with_symmetric_key(data, &key)?;
+                
+                Ok((encrypted_data, EncryptionMetadata {
+                    is_encrypted: true,
+                    encryption_algorithm: "AES-256-GCM".to_string(),
+                    nonce: Some(general_purpose::STANDARD.encode(&nonce)),
+                    permissions: FilePermissions::OwnerOnly {
+                        owner: perm_owner.clone(),
+                        encrypted_key: key, // Store the key for demo
+                    },
+                }))
+            },
+            
+            _ => {
+                // For demo, treat other permissions as encrypted with a simple key
+                let key = self.generate_symmetric_key()?;
+                let (encrypted_data, nonce) = self.encrypt_with_symmetric_key(data, &key)?;
+                
+                Ok((encrypted_data, EncryptionMetadata {
+                    is_encrypted: true,
+                    encryption_algorithm: "AES-256-GCM".to_string(),
+                    nonce: Some(general_purpose::STANDARD.encode(&nonce)),
+                    permissions: permissions.clone(),
+                }))
+            }
+        }
+    }
+
+    /// Encrypt data with symmetric key
+    fn encrypt_with_symmetric_key(&self, data: &[u8], key_b64: &str) -> Result<(Vec<u8>, Vec<u8>), DfsError> {
+        let key_bytes = general_purpose::STANDARD.decode(key_b64)
+            .map_err(|e| DfsError::EncryptionError(format!("Invalid key: {}", e)))?;
+        
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(key);
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+
+        let ciphertext = cipher.encrypt(&nonce, data)
+            .map_err(|e| DfsError::EncryptionError(format!("Encryption failed: {}", e)))?;
+
+        Ok((ciphertext, nonce.to_vec()))
+    }
+
+    /// Add a member to a permission group
+    pub async fn add_group_member(
+        &self,
+        group_id: String,
+        new_member: String,
+        requester: String,
+    ) -> Result<(), DfsError> {
+        let mut groups = self.permission_groups.write().await;
+        
+        let group = groups.get_mut(&group_id)
+            .ok_or_else(|| DfsError::GroupNotFound(group_id.clone()))?;
+
+        // Check if requester has admin permissions
+        if group.owner != requester {
+            return Err(DfsError::AccessDenied(
+                "Only group owner can add members".to_string()
+            ));
+        }
+
+        if !group.members.contains(&new_member) {
+            group.members.push(new_member.clone());
+            group.last_modified = Utc::now();
+            println!("👥 Added {} to group {}", new_member, group_id);
+        }
+
+        Ok(())
+    }
+
+    /// Remove a member from a permission group
+    pub async fn remove_group_member(
+        &self,
+        group_id: String,
+        member_to_remove: String,
+        requester: String,
+    ) -> Result<(), DfsError> {
+        let mut groups = self.permission_groups.write().await;
+        
+        let group = groups.get_mut(&group_id)
+            .ok_or_else(|| DfsError::GroupNotFound(group_id.clone()))?;
+
+        // Check if requester has admin permissions
+        if group.owner != requester {
+            return Err(DfsError::AccessDenied(
+                "Only group owner can remove members".to_string()
+            ));
+        }
+
+        group.members.retain(|member| member != &member_to_remove);
+        group.last_modified = Utc::now();
+        println!("❌ Removed {} from group {}", member_to_remove, group_id);
+
+        Ok(())
     }
 }
 

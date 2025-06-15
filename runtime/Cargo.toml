@@ -35,6 +35,10 @@ path = "bin/federated_3tb_llm_demo.rs"
 name = "decentralized_storage_demo"
 path = "bin/decentralized_storage_demo.rs"
 
+[[bin]]
+name = "permissions_demo"
+path = "bin/permissions_demo.rs"
+
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]
@@ -88,6 +92,8 @@ lz4 = "1.24"
 flate2 = "1.0"
 serde_yaml = "0.9"
 uuid = { version = "1.0", features = ["v4"] }
+aes-gcm = "0.10"
+base64 = "0.22"
 
 [dev-dependencies]
 criterion = "0.5"

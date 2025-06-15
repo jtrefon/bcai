@@ -3967,7 +3967,9 @@ dependencies = [
 name = "runtime"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "anyhow",
+ "base64",
  "blake3",
  "bytemuck",
  "bytes",
