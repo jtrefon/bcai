@@ -363,12 +363,16 @@ checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
 name = "bcai"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
  "clap",
  "jobmanager",
  "keygen",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -4802,6 +4806,7 @@ checksum = "3cf4199d1e5d15ddd86a694e4d0dffa9c323ce759fea589f00fef9d81cc1931d"
 dependencies = [
  "getrandom 0.3.3",
  "js-sys",
+ "serde",
  "wasm-bindgen",
 ]
 
