@@ -151,16 +151,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Calculate earnings
     println!("\n📈 Storage node earnings:");
-    for (account, balance_after) in &balances_after {
-        if account.starts_with("storage_node") {
-            let balance_before = balances_before.get(account).unwrap_or(&0);
-            let earnings = balance_after - balance_before;
-            if earnings > 0 {
-                println!("   {}: +{} BCAI earned", account, earnings);
-            }
+    let storage_metrics = dfs.get_storage_metrics().await;
+    for (node_id, metrics) in storage_metrics.iter() {
+        println!("  📊 {}: {} BCAI earned, {:.1}% reliability", 
+                node_id, metrics.total_earnings, metrics.reliability * 100.0);
+    }
+
+    // Force complete storage contracts for demonstration
+    println!("\n🔄 Force completing storage contracts for rewards demonstration...");
+    match dfs.force_complete_storage_contracts().await {
+        Ok(total_distributed) => {
+            println!("✅ Completed all active contracts, distributed {} BCAI total", total_distributed);
+        }
+        Err(e) => {
+            println!("❌ Error completing contracts: {}", e);
         }
     }
-    println!();
+
+    // Show detailed earnings report
+    println!("\n📊 Detailed Node Earnings Report:");
+    let earnings_report = dfs.get_node_earnings_report().await;
+    for report in &earnings_report {
+        println!("  🏆 {} ({}):", report.node_id, report.performance_tier);
+        println!("    💰 Total Earnings: {} BCAI", report.total_earnings);
+        println!("    📈 Reliability: {:.2}%", report.reliability_score * 100.0);
+        println!("    ⚡ Avg Response: {}ms", report.avg_response_time);
+        println!("    💾 Capacity: {:.1} GB", report.storage_capacity_gb);
+        println!("    📊 Earnings/GB: {:.2} BCAI", report.earnings_per_gb);
+    }
+
+    // Show network-wide rewards statistics
+    println!("\n🌐 Network Rewards Distribution Statistics:");
+    let rewards_stats = dfs.get_rewards_distribution_stats().await;
+    println!("  💸 Total Distributed: {} BCAI", rewards_stats.total_earnings_distributed);
+    println!("  👥 Active Providers: {}", rewards_stats.active_storage_providers);
+    println!("  ✅ Completed Contracts: {}", rewards_stats.completed_contracts);
+    println!("  💾 Total Capacity: {:.1} GB", rewards_stats.total_storage_capacity_gb);
+    println!("  📊 Avg Earnings/Provider: {} BCAI", rewards_stats.avg_earnings_per_provider);
+    println!("  🎯 Network Reliability: {:.2}%", rewards_stats.avg_reliability_score * 100.0);
+    println!("  🏆 Performance Tiers:");
+    println!("    Premium: {} BCAI", rewards_stats.premium_tier_earnings);
+    println!("    Standard: {} BCAI", rewards_stats.standard_tier_earnings);
+    println!("    Basic: {} BCAI", rewards_stats.basic_tier_earnings);
 
     // ===== DEMONSTRATE LARGE DATASET SCENARIO =====
     println!("📊 Demo 4: Large Dataset Scenario (3TB ML Dataset)");

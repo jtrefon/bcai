@@ -22,6 +22,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, RwLock as AsyncRwLock};
 use thiserror::Error;
 use chrono::{DateTime, Utc};
+use rand;
 
 /// Decentralized filesystem errors
 #[derive(Debug, Error)]
@@ -859,6 +860,230 @@ impl DecentralizedFilesystem {
         storage_metrics.insert(metrics.node_id.clone(), metrics);
     }
 
+    /// Get storage metrics (public access)
+    pub async fn get_storage_metrics(&self) -> HashMap<String, StorageNodeMetrics> {
+        let storage_metrics = self.storage_metrics.read().await;
+        storage_metrics.clone()
+    }
+
+    /// Update storage node earnings and performance metrics
+    pub async fn update_node_earnings(&self, node_id: &str, earnings: u64, contracts_completed: u32) {
+        let mut storage_metrics = self.storage_metrics.write().await;
+        if let Some(metrics) = storage_metrics.get_mut(node_id) {
+            metrics.total_earnings += earnings;
+            metrics.active_contracts = metrics.active_contracts.saturating_sub(contracts_completed);
+            metrics.last_heartbeat = Utc::now();
+            
+            // Update reliability based on successful contract completion
+            if contracts_completed > 0 {
+                metrics.reliability = (metrics.reliability * 0.9 + 0.98 * 0.1).min(1.0);
+            }
+        }
+    }
+
+    /// Force complete storage contracts (for demos and testing)
+    pub async fn force_complete_storage_contracts(&self) -> Result<u64, DfsError> {
+        let all_contracts = {
+            let contracts = self.storage_contracts.read().await;
+            contracts.values()
+                .filter(|c| c.status == StorageContractStatus::Active)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        let mut total_distributed = 0u64;
+        for contract in all_contracts {
+            // Simulate contract completion
+            let payment = self.simulate_contract_completion(contract).await?;
+            total_distributed += payment;
+        }
+
+        Ok(total_distributed)
+    }
+
+    /// Simulate contract completion with performance-based rewards
+    async fn simulate_contract_completion(&self, contract: StorageContract) -> Result<u64, DfsError> {
+        println!("💰 Force completing storage contract: {}", contract.contract_id);
+
+        // Simulate storage verification (assume 95% success rate)
+        let verified_nodes: Vec<String> = contract.storage_nodes.iter()
+            .filter(|_| rand::random::<f32>() > 0.05) // 95% success rate
+            .cloned()
+            .collect();
+        
+        let availability_ratio = verified_nodes.len() as f32 / contract.storage_nodes.len() as f32;
+        let mut total_payment = 0u64;
+
+        // Calculate performance bonuses
+        for node_id in &verified_nodes {
+            let base_payment = contract.payment_per_node;
+            
+            // Get node performance metrics for bonus calculation
+            let performance_bonus = {
+                let metrics = self.storage_metrics.read().await;
+                if let Some(node_metrics) = metrics.get(node_id) {
+                    // Bonus based on reliability and response time
+                    let reliability_bonus = (node_metrics.reliability - 0.9).max(0.0) * base_payment as f32;
+                    let speed_bonus = if node_metrics.avg_response_time < 100 { 
+                        base_payment / 10 // 10% bonus for fast response
+                    } else { 0 };
+                    (reliability_bonus as u64) + speed_bonus
+                } else {
+                    0
+                }
+            };
+
+            let total_node_payment = base_payment + performance_bonus;
+
+            // Transfer payment
+            {
+                let mut ledger = self.token_ledger.write().await;
+                let escrow_account = format!("escrow_{}", contract.contract_id);
+                
+                if let Err(e) = ledger.transfer(&escrow_account, node_id, total_node_payment) {
+                    println!("⚠️  Payment failed for node {}: {}", node_id, e);
+                } else {
+                    total_payment += total_node_payment;
+                    println!("💸 Paid {} BCAI to {} (base: {}, bonus: {})", 
+                            total_node_payment, node_id, base_payment, performance_bonus);
+                    
+                    // Update node earnings
+                    self.update_node_earnings(node_id, total_node_payment, 1).await;
+                }
+            }
+        }
+
+        // Handle penalties for failed nodes
+        let failed_nodes: Vec<String> = contract.storage_nodes.iter()
+            .filter(|node_id| !verified_nodes.contains(node_id))
+            .cloned()
+            .collect();
+
+        for node_id in &failed_nodes {
+            println!("❌ Node {} failed availability check - no payment", node_id);
+            
+            // Apply reliability penalty
+            let mut storage_metrics = self.storage_metrics.write().await;
+            if let Some(metrics) = storage_metrics.get_mut(node_id) {
+                metrics.reliability = (metrics.reliability * 0.8).max(0.1); // Significant penalty
+            }
+        }
+
+        // Return remaining escrow to client
+        let remaining_escrow = contract.escrow_amount - total_payment;
+        if remaining_escrow > 0 {
+            let mut ledger = self.token_ledger.write().await;
+            let escrow_account = format!("escrow_{}", contract.contract_id);
+            let _ = ledger.transfer(&escrow_account, &contract.client, remaining_escrow);
+            println!("💰 Returned {} BCAI to client {}", remaining_escrow, contract.client);
+        }
+
+        // Update contract status
+        {
+            let mut contracts = self.storage_contracts.write().await;
+            if let Some(contract_mut) = contracts.get_mut(&contract.contract_id) {
+                contract_mut.status = StorageContractStatus::Completed;
+            }
+        }
+
+        // Emit completion event
+        let _ = self.event_sender.send(DfsEvent::StorageContractCompleted {
+            contract_id: contract.contract_id,
+            payment: total_payment,
+        });
+
+        println!("✅ Contract completed: {} BCAI distributed, {:.1}% availability", 
+                total_payment, availability_ratio * 100.0);
+        
+        Ok(total_payment)
+    }
+
+    /// Get detailed node earnings report
+    pub async fn get_node_earnings_report(&self) -> Vec<NodeEarningsReport> {
+        let storage_metrics = self.storage_metrics.read().await;
+        let mut reports = Vec::new();
+
+        for (node_id, metrics) in storage_metrics.iter() {
+            let report = NodeEarningsReport {
+                node_id: node_id.clone(),
+                total_earnings: metrics.total_earnings,
+                contracts_completed: metrics.active_contracts,
+                reliability_score: metrics.reliability,
+                avg_response_time: metrics.avg_response_time,
+                storage_capacity_gb: metrics.total_storage as f64 / (1024.0 * 1024.0 * 1024.0),
+                earnings_per_gb: if metrics.total_storage > 0 {
+                    metrics.total_earnings as f64 / (metrics.total_storage as f64 / (1024.0 * 1024.0 * 1024.0))
+                } else {
+                    0.0
+                },
+                performance_tier: if metrics.reliability > 0.98 && metrics.avg_response_time < 50 {
+                    "Premium".to_string()
+                } else if metrics.reliability > 0.95 && metrics.avg_response_time < 100 {
+                    "Standard".to_string()
+                } else {
+                    "Basic".to_string()
+                },
+            };
+            reports.push(report);
+        }
+
+        // Sort by total earnings
+        reports.sort_by(|a, b| b.total_earnings.cmp(&a.total_earnings));
+        reports
+    }
+
+    /// Calculate network-wide rewards distribution statistics
+    pub async fn get_rewards_distribution_stats(&self) -> RewardsDistributionStats {
+        let storage_metrics = self.storage_metrics.read().await;
+        let contracts = self.storage_contracts.read().await;
+        
+        let total_earnings: u64 = storage_metrics.values().map(|m| m.total_earnings).sum();
+        let active_storage_providers = storage_metrics.len();
+        let completed_contracts = contracts.values()
+            .filter(|c| c.status == StorageContractStatus::Completed)
+            .count();
+        let total_storage_gb: f64 = storage_metrics.values()
+            .map(|m| m.total_storage as f64 / (1024.0 * 1024.0 * 1024.0))
+            .sum();
+        
+        let avg_reliability: f32 = if storage_metrics.is_empty() {
+            0.0
+        } else {
+            storage_metrics.values().map(|m| m.reliability).sum::<f32>() / storage_metrics.len() as f32
+        };
+
+        // Calculate earnings distribution tiers
+        let mut premium_earnings = 0u64;
+        let mut standard_earnings = 0u64;
+        let mut basic_earnings = 0u64;
+        
+        for metrics in storage_metrics.values() {
+            if metrics.reliability > 0.98 && metrics.avg_response_time < 50 {
+                premium_earnings += metrics.total_earnings;
+            } else if metrics.reliability > 0.95 && metrics.avg_response_time < 100 {
+                standard_earnings += metrics.total_earnings;
+            } else {
+                basic_earnings += metrics.total_earnings;
+            }
+        }
+
+        RewardsDistributionStats {
+            total_earnings_distributed: total_earnings,
+            active_storage_providers,
+            completed_contracts,
+            total_storage_capacity_gb: total_storage_gb,
+            avg_earnings_per_provider: if active_storage_providers > 0 {
+                total_earnings / active_storage_providers as u64
+            } else {
+                0
+            },
+            avg_reliability_score: avg_reliability,
+            premium_tier_earnings: premium_earnings,
+            standard_tier_earnings: standard_earnings,
+            basic_tier_earnings: basic_earnings,
+        }
+    }
+
     /// Get filesystem statistics
     pub async fn get_statistics(&self) -> DfsStatistics {
         let file_index = self.file_index.read().await;
@@ -899,6 +1124,33 @@ pub struct DfsStatistics {
     pub assembly_stats: AssemblyStats,
     pub cache_hit_rate: f32,
     pub avg_replication: f32,
+}
+
+/// Individual node earnings report
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeEarningsReport {
+    pub node_id: String,
+    pub total_earnings: u64,
+    pub contracts_completed: u32,
+    pub reliability_score: f32,
+    pub avg_response_time: u32,
+    pub storage_capacity_gb: f64,
+    pub earnings_per_gb: f64,
+    pub performance_tier: String,
+}
+
+/// Network-wide rewards distribution statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RewardsDistributionStats {
+    pub total_earnings_distributed: u64,
+    pub active_storage_providers: usize,
+    pub completed_contracts: usize,
+    pub total_storage_capacity_gb: f64,
+    pub avg_earnings_per_provider: u64,
+    pub avg_reliability_score: f32,
+    pub premium_tier_earnings: u64,
+    pub standard_tier_earnings: u64,
+    pub basic_tier_earnings: u64,
 }
 
 #[cfg(test)]
