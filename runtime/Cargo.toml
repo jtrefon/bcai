@@ -15,6 +15,10 @@ path = "src/bin/runtime.rs"
 name = "vm_test_runner"
 path = "src/bin/vm_test_runner.rs"
 
+[[bin]]
+name = "blockchain"
+path = "src/bin/blockchain.rs"
+
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]
