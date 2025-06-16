@@ -302,17 +302,99 @@ document.addEventListener('DOMContentLoaded', function() {
     // GitHub API Integration (for live stats)
     async function fetchGitHubStats() {
         try {
-            const response = await fetch('https://api.github.com/repos/jtrefon/bcai');
-            const data = await response.json();
+            // Fetch basic repo stats
+            const repoResponse = await fetch('https://api.github.com/repos/jtrefon/bcai');
+            const repoData = await repoResponse.json();
+            
+            // Fetch languages data for more accurate code metrics
+            const languagesResponse = await fetch('https://api.github.com/repos/jtrefon/bcai/languages');
+            const languagesData = await languagesResponse.json();
+            
+            // Calculate total lines of code from languages data
+            // GitHub languages API returns bytes, we estimate lines
+            const totalBytes = Object.values(languagesData).reduce((sum, bytes) => sum + bytes, 0);
+            const estimatedLines = Math.round(totalBytes / 50); // ~50 bytes per line average
+            
+            // Format the lines count
+            let linesDisplay;
+            if (estimatedLines >= 1000000) {
+                linesDisplay = Math.round(estimatedLines / 100000) / 10 + 'M';
+            } else if (estimatedLines >= 1000) {
+                linesDisplay = Math.round(estimatedLines / 100) / 10 + 'K';
+            } else {
+                linesDisplay = estimatedLines.toString();
+            }
             
             // Update stats if elements exist
             const starsElement = document.querySelector('.github-stars');
             const forksElement = document.querySelector('.github-forks');
+            const linesElement = document.querySelector('.stat-label:contains("Lines of Code")');
             
-            if (starsElement) starsElement.textContent = data.stargazers_count || '0';
-            if (forksElement) forksElement.textContent = data.forks_count || '0';
+            if (starsElement) starsElement.textContent = repoData.stargazers_count || '0';
+            if (forksElement) forksElement.textContent = repoData.forks_count || '0';
+            
+            // Update lines of code - find the stat number before "Lines of Code" label
+            const statsNumbers = document.querySelectorAll('.stat-number');
+            const statsLabels = document.querySelectorAll('.stat-label');
+            
+            for (let i = 0; i < statsLabels.length; i++) {
+                if (statsLabels[i].textContent === 'Lines of Code') {
+                    if (statsNumbers[i]) {
+                        statsNumbers[i].textContent = linesDisplay + '+';
+                    }
+                    break;
+                }
+            }
+            
+            // Also try to get file count for modules estimate
+            try {
+                const contentsResponse = await fetch('https://api.github.com/repos/jtrefon/bcai/contents/runtime/src');
+                const contentsData = await contentsResponse.json();
+                
+                if (Array.isArray(contentsData)) {
+                    const moduleCount = contentsData.filter(item => 
+                        item.name.endsWith('.rs') || item.type === 'dir'
+                    ).length;
+                    
+                    // Update modules count
+                    for (let i = 0; i < statsLabels.length; i++) {
+                        if (statsLabels[i].textContent === 'Core Modules') {
+                            if (statsNumbers[i]) {
+                                statsNumbers[i].textContent = moduleCount + '+';
+                            }
+                            break;
+                        }
+                    }
+                }
+            } catch (moduleError) {
+                console.log('Could not fetch module count:', moduleError);
+            }
+            
+            // Show language breakdown in console for debugging
+            const languageBreakdown = Object.entries(languagesData)
+                .sort(([,a], [,b]) => b - a)
+                .map(([lang, bytes]) => `${lang}: ${Math.round(bytes/1024)}KB`)
+                .join(', ');
+            
+            console.log(`Updated code metrics: ${linesDisplay}+ lines from languages: ${languageBreakdown}`);
+            
         } catch (error) {
             console.log('GitHub API fetch failed:', error);
+                         // Fallback to manual count if API fails
+             const statsNumbers = document.querySelectorAll('.stat-number');
+             const statsLabels = document.querySelectorAll('.stat-label');
+             
+             for (let i = 0; i < statsLabels.length; i++) {
+                 if (statsLabels[i].textContent === 'Lines of Code') {
+                     if (statsNumbers[i]) {
+                         statsNumbers[i].textContent = '170K+'; // Manual fallback based on actual count
+                     }
+                 } else if (statsLabels[i].textContent === 'Core Modules') {
+                     if (statsNumbers[i]) {
+                         statsNumbers[i].textContent = '35+'; // Manual fallback based on actual count
+                     }
+                 }
+             }
         }
     }
     
