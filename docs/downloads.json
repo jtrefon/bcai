@@ -1,29 +1,29 @@
 {
-  "latest_version": "v0.1.0-dev",
+  "latest_version": "v0.1.0",
   "release_date": "2024-12-20T00:00:00Z",
   "platforms": [
     {
       "name": "Linux x64",
       "filename": "bcai-linux-x64.tar.gz",
-      "download_url": "https://github.com/jtrefon/bcai/releases/latest/download/bcai-linux-x64.tar.gz",
+      "download_url": "https://github.com/jtrefon/bcai/releases/download/v0.1.0/bcai-linux-x64.tar.gz",
       "size": "~ 25 MB"
     },
     {
       "name": "macOS x64 (Intel)",
       "filename": "bcai-macos-x64.tar.gz", 
-      "download_url": "https://github.com/jtrefon/bcai/releases/latest/download/bcai-macos-x64.tar.gz",
+      "download_url": "https://github.com/jtrefon/bcai/releases/download/v0.1.0/bcai-macos-x64.tar.gz",
       "size": "~ 28 MB"
     },
     {
       "name": "macOS ARM64 (Apple Silicon)",
       "filename": "bcai-macos-arm64.tar.gz",
-      "download_url": "https://github.com/jtrefon/bcai/releases/latest/download/bcai-macos-arm64.tar.gz",
+      "download_url": "https://github.com/jtrefon/bcai/releases/download/v0.1.0/bcai-macos-arm64.tar.gz",
       "size": "~ 26 MB"
     },
     {
       "name": "Windows x64", 
       "filename": "bcai-windows-x64.zip",
-      "download_url": "https://github.com/jtrefon/bcai/releases/latest/download/bcai-windows-x64.zip",
+      "download_url": "https://github.com/jtrefon/bcai/releases/download/v0.1.0/bcai-windows-x64.zip",
       "size": "~ 30 MB"
     }
   ]
