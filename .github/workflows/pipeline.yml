@@ -8,10 +8,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Stage 1: Multi-Platform Build
+  # Stage 1: Multi-Platform Build (Parallel)
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false  # Don't cancel other builds if one fails
       matrix:
         include:
           - os: ubuntu-latest
@@ -19,7 +20,7 @@ jobs:
             artifact: linux-x86_64
           - os: macos-13  # Intel Mac
             target: x86_64-apple-darwin
-            artifact: macos-x86_64
+            artifact: macos-x86_64  
           - os: macos-14  # Apple Silicon Mac
             target: aarch64-apple-darwin
             artifact: macos-aarch64
@@ -27,7 +28,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact: windows-x86_64
     outputs:
-      artifact-name: ${{ steps.artifact.outputs.name }}
+      linux-artifact: ${{ steps.linux-artifact.outputs.name }}
+      macos-intel-artifact: ${{ steps.macos-intel-artifact.outputs.name }}
+      macos-arm-artifact: ${{ steps.macos-arm-artifact.outputs.name }}
+      windows-artifact: ${{ steps.windows-artifact.outputs.name }}
     
     steps:
       - name: Checkout code
@@ -50,145 +54,101 @@ jobs:
             ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
             ${{ runner.os }}-cargo-
       
-      - name: Build all BCAI components
-        run: |
-          echo "🔨 Building BCAI node components..."
-          
-          # Build runtime with no default features (for CI compatibility)
-          echo "📦 Building runtime for ${{ matrix.target }}..."
-          cargo build --release --manifest-path runtime/Cargo.toml --target ${{ matrix.target }} --no-default-features
-          
-          # Build other components with error handling
-          echo "📦 Building additional components for ${{ matrix.target }}..."
-          
-          # Try to build keygen
-          if cargo build --release --manifest-path keygen/Cargo.toml --target ${{ matrix.target }} 2>/dev/null; then
-            echo "✅ keygen built successfully"
-          else
-            echo "⚠️ keygen build failed - skipping"
-          fi
-          
-          # Try to build jobmanager
-          if cargo build --release --manifest-path jobmanager/Cargo.toml --target ${{ matrix.target }} 2>/dev/null; then
-            echo "✅ jobmanager built successfully"
-          else
-            echo "⚠️ jobmanager build failed - skipping"
-          fi
-          
-          # Try to build dashboard
-          if cargo build --release --manifest-path dashboard/Cargo.toml --target ${{ matrix.target }} 2>/dev/null; then
-            echo "✅ dashboard built successfully"
-          else
-            echo "⚠️ dashboard build failed - skipping"
-          fi
-          
-          # Try to build devnet
-          if cargo build --release --manifest-path devnet/Cargo.toml --target ${{ matrix.target }} 2>/dev/null; then
-            echo "✅ devnet built successfully"
-          else
-            echo "⚠️ devnet build failed - skipping"
-          fi
-          
-          # Try to build main CLI if it exists
-          if [ -f "src/main.rs" ] || [ -f "Cargo.toml" ]; then
-            if cargo build --release --bin bcai --target ${{ matrix.target }} 2>/dev/null; then
-              echo "✅ main BCAI CLI built successfully"
-            else
-              echo "⚠️ main CLI build failed - skipping"
-            fi
-          fi
-          
-          echo "✅ Component builds completed (with any failures handled gracefully)"
+      - name: Build runtime (required)
+        run: cargo build --release --manifest-path runtime/Cargo.toml --target ${{ matrix.target }} --no-default-features
       
-      - name: Verify built binaries
+      - name: Build keygen
+        continue-on-error: true
+        run: cargo build --release --manifest-path keygen/Cargo.toml --target ${{ matrix.target }}
+      
+      - name: Build jobmanager  
+        continue-on-error: true
+        run: cargo build --release --manifest-path jobmanager/Cargo.toml --target ${{ matrix.target }}
+      
+      - name: Build dashboard
+        continue-on-error: true
+        run: cargo build --release --manifest-path dashboard/Cargo.toml --target ${{ matrix.target }}
+      
+      - name: Build devnet
+        continue-on-error: true
+        run: cargo build --release --manifest-path devnet/Cargo.toml --target ${{ matrix.target }}
+      
+      - name: Verify built binaries (Unix)
+        if: runner.os != 'Windows'
         run: |
           echo "📦 Built binaries for ${{ matrix.target }}:"
           ls -la target/${{ matrix.target }}/release/
           echo ""
-          
-          # List all executable binaries
           echo "🎯 Executable binaries:"
           find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable | grep -v '\.d$' | sort || echo "No executables found"
       
-      - name: Package binaries as artifacts
-        id: artifact
+      - name: Verify built binaries (Windows)
+        if: runner.os == 'Windows'
         run: |
-          mkdir -p artifacts
+          Write-Host "📦 Built binaries for ${{ matrix.target }}:" -ForegroundColor Green
+          Get-ChildItem -Path "target/${{ matrix.target }}/release/" -File | Format-Table Name, Length
+          Write-Host "🎯 Executable binaries:" -ForegroundColor Yellow
+          Get-ChildItem -Path "target/${{ matrix.target }}/release/" -File -Include "*.exe" | ForEach-Object { $_.Name }
+        shell: pwsh
+      
+      - name: Create artifacts directory
+        run: |
+          if (Test-Path -Path "artifacts") { Remove-Item -Path "artifacts" -Recurse -Force }
+          New-Item -ItemType Directory -Path "artifacts" -Force
+        shell: pwsh
+      
+      - name: Copy binaries to artifacts
+        run: |
+          $targetDir = "target/${{ matrix.target }}/release"
+          $binaries = @("blockchain", "runtime", "keygen", "jobmanager", "dashboard", "devnet", "bcai", "vm_test_runner")
+          $found = 0
           
-          # Copy all built binaries to artifacts directory (more explicit)
-          echo "📦 Packaging binaries..."
+          foreach ($binary in $binaries) {
+            $binPath = Join-Path $targetDir $binary
+            $binPathExe = Join-Path $targetDir "$binary.exe"
+            
+            if (Test-Path $binPath) {
+              Copy-Item $binPath "artifacts/" -Force
+              $size = (Get-Item $binPath).Length
+              Write-Host "✅ Packaged: $binary ($size bytes)" -ForegroundColor Green
+              $found++
+            } elseif (Test-Path $binPathExe) {
+              Copy-Item $binPathExe "artifacts/" -Force  
+              $size = (Get-Item $binPathExe).Length
+              Write-Host "✅ Packaged: $binary.exe ($size bytes)" -ForegroundColor Green
+              $found++
+            } else {
+              Write-Host "⚠️ Binary not found: $binary" -ForegroundColor Yellow
+            }
+          }
           
-          # Copy all essential binaries for a functional node
-          echo "📦 Packaging successfully built binaries..."
+          if ($found -eq 0) {
+            Write-Host "❌ No binaries found!" -ForegroundColor Red
+            exit 1
+          }
           
-          # Essential binaries (must exist)
-          for binary in blockchain runtime; do
-            if [ -f "target/${{ matrix.target }}/release/$binary" ] || [ -f "target/${{ matrix.target }}/release/${binary}.exe" ]; then
-              cp "target/${{ matrix.target }}/release/$binary"* artifacts/ 2>/dev/null || true
-              # Get file size (cross-platform compatible)
-              for file in "target/${{ matrix.target }}/release/$binary"*; do
-                if [ -f "$file" ]; then
-                  size=$(wc -c < "$file" 2>/dev/null || echo "0")
-                  echo "✅ Packaged: $(basename "$file") (${size} bytes)"
-                fi
-              done
-            else
-              echo "❌ CRITICAL: Essential binary not found: $binary"
-              exit 1
-            fi
-          done
-          
-          # Optional binaries (include if they exist)
-          for binary in keygen jobmanager dashboard devnet bcai vm_test_runner; do
-            if [ -f "target/${{ matrix.target }}/release/$binary" ] || [ -f "target/${{ matrix.target }}/release/${binary}.exe" ]; then
-              cp "target/${{ matrix.target }}/release/$binary"* artifacts/ 2>/dev/null || true
-              # Get file size (cross-platform compatible)
-              for file in "target/${{ matrix.target }}/release/$binary"*; do
-                if [ -f "$file" ]; then
-                  size=$(wc -c < "$file" 2>/dev/null || echo "0")
-                  echo "✅ Packaged: $(basename "$file") (${size} bytes)"
-                fi
-              done
-            else
-              echo "⚠️  Optional binary not found: $binary (skipping)"
-            fi
-          done
-          
-          # Copy any other executables we might have missed
-          find "target/${{ matrix.target }}/release" -maxdepth 1 -type f -executable | grep -v '\.d$' | while read binary; do
-            binary_name=$(basename "$binary")
-            if [ ! -f "artifacts/$binary_name" ]; then
-              cp "$binary" artifacts/
-              # Get file size (cross-platform compatible)
-              size=$(wc -c < "$binary" 2>/dev/null || echo "0")
-              echo "📦 Additional binary: $binary_name (${size} bytes)"
-            fi
-          done
-          
-          # Create a detailed manifest
-          echo "📊 Creating build manifest..."
-          echo "=== BCAI Build Manifest ===" > artifacts/BUILD_MANIFEST.txt
-          echo "Build timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> artifacts/BUILD_MANIFEST.txt
-          echo "Git SHA: ${{ github.sha }}" >> artifacts/BUILD_MANIFEST.txt
-          echo "Branch: ${{ github.ref_name }}" >> artifacts/BUILD_MANIFEST.txt
-          echo "Build host: $(uname -a)" >> artifacts/BUILD_MANIFEST.txt
-          echo "" >> artifacts/BUILD_MANIFEST.txt
-          echo "=== Packaged Binaries ===" >> artifacts/BUILD_MANIFEST.txt
-          ls -la artifacts/ | grep -v BUILD_MANIFEST >> artifacts/BUILD_MANIFEST.txt
-          echo "" >> artifacts/BUILD_MANIFEST.txt
-          echo "=== Binary Details ===" >> artifacts/BUILD_MANIFEST.txt
-          for binary in artifacts/*; do
-            if [ -f "$binary" ] && [ "$(basename "$binary")" != "BUILD_MANIFEST.txt" ]; then
-              # Get file size (Linux compatible)
-              size=$(stat -c%s "$binary" 2>/dev/null || wc -c < "$binary" 2>/dev/null || echo "0")
-              echo "$(basename $binary): ${size} bytes" >> artifacts/BUILD_MANIFEST.txt
-            fi
-          done
-          
-          echo "📦 Artifact summary:"
-          cat artifacts/BUILD_MANIFEST.txt
-          
-          echo "name=bcai-binaries-${{ matrix.artifact }}-${{ github.sha }}" >> $GITHUB_OUTPUT
+          Write-Host "📦 Total binaries packaged: $found" -ForegroundColor Green
+        shell: pwsh
+      
+      - name: Create build manifest  
+        run: |
+          "=== BCAI Build Manifest ===" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Encoding UTF8
+          "Build timestamp: $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          "Git SHA: ${{ github.sha }}" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          "Branch: ${{ github.ref_name }}" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          "Target: ${{ matrix.target }}" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          "Platform: ${{ matrix.artifact }}" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          "" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          "=== Packaged Binaries ===" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          Get-ChildItem -Path "artifacts" -File | Where-Object { $_.Name -ne "BUILD_MANIFEST.txt" } | ForEach-Object {
+            "$($_.Name): $($_.Length) bytes" | Out-File -FilePath "artifacts/BUILD_MANIFEST.txt" -Append -Encoding UTF8
+          }
+          Write-Host "📋 Build manifest created" -ForegroundColor Green
+        shell: pwsh
+      
+      - name: Set artifact output
+        run: echo "name=bcai-binaries-${{ matrix.artifact }}-${{ github.sha }}" >> $GITHUB_OUTPUT
+        shell: bash
       
       - name: Upload build artifacts (internal use)
         uses: actions/upload-artifact@v4
@@ -197,22 +157,19 @@ jobs:
           path: artifacts/
           retention-days: 1  # Short retention - only for pipeline stages
 
-  # Stage 2: Test
+  # Stage 2: Test (Linux only for speed)
   test:
     needs: build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platform: [linux-x86_64, macos-x86_64, macos-aarch64, windows-x86_64]
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Download build artifacts
+      - name: Download Linux build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: bcai-binaries-${{ matrix.platform }}-${{ github.sha }}
+          name: bcai-binaries-linux-x86_64-${{ github.sha }}
           path: artifacts/
       
       - name: Setup artifacts for testing
@@ -637,7 +594,7 @@ jobs:
           echo ""
           echo "🔗 Integration testing completed successfully"
 
-  # Stage 4: Publish/Release 
+  # Stage 4: Publish/Release (All Platforms)
   publish:
     needs: [build, test, integration]
     runs-on: ubuntu-latest
