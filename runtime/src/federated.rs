@@ -3,7 +3,7 @@
 //! This module implements federated learning capabilities including model aggregation,
 //! federated averaging, and secure multi-party computation for distributed AI training.
 
-use crate::node::NodeCapability;
+use crate::node::{NodeCapability, CapabilityType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -506,6 +506,7 @@ mod tests {
             gpu_memory_gb: 8,
             available_stake: 1000,
             reputation: 0,
+            capability_types: vec![CapabilityType::BasicCompute, CapabilityType::GpuAccelerated],
         };
 
         assert!(engine.add_participant("node1".to_string(), capability.clone(), 1000).is_ok());

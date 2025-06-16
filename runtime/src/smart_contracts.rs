@@ -580,6 +580,96 @@ impl SmartContractEngine {
     pub fn get_contracts_by_type(&self, contract_type: ContractType) -> Vec<&SmartContract> {
         self.contracts.values().filter(|c| c.contract_type == contract_type).collect()
     }
+
+    // ============================================================================
+    // Governance Integration Functions
+    // ============================================================================
+
+    /// Execute a governance proposal through smart contract system
+    pub fn execute_governance_proposal(
+        &self,
+        proposal_id: &str,
+        execution_data: &crate::advanced_governance::ExecutionData,
+    ) -> ContractResult<String> {
+        match execution_data.contract_address.as_str() {
+            "0x1234...treasury" => {
+                // Treasury allocation
+                self.execute_treasury_allocation(proposal_id, execution_data)
+            }
+            "0x5678...consensus" => {
+                // Consensus upgrade
+                self.execute_consensus_upgrade(proposal_id, execution_data)
+            }
+            "0x9abc...bridge" => {
+                // Cross-chain bridge operations
+                self.execute_bridge_operation(proposal_id, execution_data)
+            }
+            _ => {
+                // Generic smart contract execution
+                self.execute_generic_contract(proposal_id, execution_data)
+            }
+        }
+    }
+
+    fn execute_treasury_allocation(
+        &self,
+        _proposal_id: &str,
+        _execution_data: &crate::advanced_governance::ExecutionData,
+    ) -> ContractResult<String> {
+        // Simulate treasury fund allocation
+        let allocation_amount = 100_000; // Would be parsed from execution_data.parameters
+        
+        // Simulate treasury fund allocation (in real system, this would transfer tokens)
+        println!("   💰 Allocating {} tokens from treasury to ecosystem development", allocation_amount);
+        println!("   💰 Treasury allocation executed successfully");
+
+        Ok(format!("Treasury allocation executed: {} tokens allocated to ecosystem development", allocation_amount))
+    }
+
+    fn execute_consensus_upgrade(
+        &self,
+        _proposal_id: &str,
+        _execution_data: &crate::advanced_governance::ExecutionData,
+    ) -> ContractResult<String> {
+        // Simulate consensus algorithm upgrade
+        println!("   🔧 Upgrading consensus algorithm...");
+        println!("   🔧 Implementing enhanced Proof of Useful Work");
+        println!("   🔧 Upgrading matrix computation validation");
+
+        // In real implementation, this would trigger network-wide upgrade
+        Ok("Consensus algorithm upgraded successfully".to_string())
+    }
+
+    fn execute_bridge_operation(
+        &self,
+        _proposal_id: &str,
+        _execution_data: &crate::advanced_governance::ExecutionData,
+    ) -> ContractResult<String> {
+        // Simulate emergency bridge patch
+        println!("   🚨 Applying emergency security patch to cross-chain bridge");
+        println!("   🚨 Updating bridge validation logic");
+        println!("   🚨 Strengthening cross-chain transaction verification");
+
+        // In real implementation, this would patch bridge contracts
+        Ok("Emergency bridge patch applied successfully".to_string())
+    }
+
+    fn execute_generic_contract(
+        &self,
+        _proposal_id: &str,
+        execution_data: &crate::advanced_governance::ExecutionData,
+    ) -> ContractResult<String> {
+        // Generic contract execution
+        let function_call = &execution_data.function_call;
+        let gas_limit = execution_data.gas_limit;
+
+        // Simulate contract execution
+        println!("   ⚡ Executing contract function: {}", function_call);
+        println!("   ⚡ Gas limit: {}", gas_limit);
+
+        // In real implementation, this would execute arbitrary smart contract functions
+        Ok(format!("Contract function '{}' executed successfully", function_call))
+    }
 }
 
 impl Default for SmartContractEngine {

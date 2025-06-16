@@ -20,6 +20,7 @@ pub mod p2p_security;
 pub mod federated_network_coordinator;
 pub mod decentralized_filesystem;
 pub mod cross_chain_bridge;
+pub mod advanced_governance;
 
 // CRITICAL MISSING MODULES - Now enabling compilation
 pub mod blockchain;

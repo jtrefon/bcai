@@ -51,6 +51,10 @@ path = "bin/timebound_permissions_simple_demo.rs"
 name = "cross_chain_bridge_demo"
 path = "bin/cross_chain_bridge_demo.rs"
 
+[[bin]]
+name = "advanced_governance_demo"
+path = "bin/advanced_governance_demo.rs"
+
 [features]
 default = []
 enhanced-vm = ["pyo3", "tch", "candle-core"]
@@ -59,7 +63,7 @@ metal-gpu = ["enhanced-vm", "metal"]
 pytorch = ["enhanced-vm"]
 
 [dependencies]
-# Core dependencies
+# Core dependencies (always required)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
@@ -70,14 +74,14 @@ clap = { version = "4.0", features = ["derive"] }
 # Essential for blockchain
 sha2 = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
-rand = "0.8"
+rand = "0.8.5"  # Unified version to avoid conflicts
 
 # Enhanced VM dependencies
 num-complex = "0.4"
 rayon = "1.7"
 ndarray = "0.15"
 
-# Optional ML dependencies
+# Optional ML dependencies (only when feature enabled)
 pyo3 = { version = "0.20", features = ["auto-initialize"], optional = true }
 tch = { version = "0.13", optional = true }
 candle-core = { version = "0.3", optional = true }
