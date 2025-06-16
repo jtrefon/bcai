@@ -830,4 +830,159 @@ jobs:
           echo "   🐧 Linux: bcai-production-release-linux-x86_64"
           echo "   🍎 Mac (Intel): bcai-production-release-macos-x86_64"
           echo "   🍎 Mac (Apple Silicon): bcai-production-release-macos-aarch64"
-          echo "   🪟 Windows: bcai-production-release-windows-x86_64" 
+          echo "   🪟 Windows: bcai-production-release-windows-x86_64"
+
+  # Stage 5: Create GitHub Release (only on tags)
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build, test, integration, publish]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bcai-production-release-*
+          path: release-artifacts/
+          merge-multiple: true
+      
+      - name: Prepare release assets with correct names
+        run: |
+          echo "📦 Preparing release assets with correct filenames..."
+          mkdir -p release-assets
+          
+          # Map our internal artifact names to expected website names
+          declare -A filename_map=(
+            ["linux-x86_64"]="bcai-linux-x64.tar.gz"
+            ["macos-x86_64"]="bcai-macos-x64.tar.gz" 
+            ["macos-aarch64"]="bcai-macos-arm64.tar.gz"
+            ["windows-x86_64"]="bcai-windows-x64.zip"
+          )
+          
+          echo "🔍 Available artifacts:"
+          ls -la release-artifacts/
+          echo ""
+          
+          for platform in linux-x86_64 macos-x86_64 macos-aarch64 windows-x86_64; do
+            # Find the artifact file for this platform
+            artifact_file=$(find release-artifacts/ -name "*${platform}*" -type f | head -1)
+            
+            if [ -n "$artifact_file" ]; then
+              target_name="${filename_map[$platform]}"
+              
+              # For Windows, we need to convert tar.gz to zip
+              if [ "$platform" = "windows-x86_64" ]; then
+                echo "🪟 Converting Windows artifact to ZIP format..."
+                temp_dir=$(mktemp -d)
+                cd "$temp_dir"
+                tar -xzf "$GITHUB_WORKSPACE/$artifact_file"
+                zip -r "$GITHUB_WORKSPACE/release-assets/$target_name" *
+                cd "$GITHUB_WORKSPACE"
+                rm -rf "$temp_dir"
+              else
+                # For Unix platforms, just copy the tar.gz
+                cp "$artifact_file" "release-assets/$target_name"
+              fi
+              
+              echo "✅ Created: $target_name (from $artifact_file)"
+            else
+              echo "❌ Missing artifact for $platform"
+            fi
+          done
+          
+          echo ""
+          echo "🚀 Final release assets:"
+          ls -la release-assets/
+          
+          # Verify all expected files exist
+          expected_files=("bcai-linux-x64.tar.gz" "bcai-macos-x64.tar.gz" "bcai-macos-arm64.tar.gz" "bcai-windows-x64.zip")
+          missing_files=0
+          
+          for file in "${expected_files[@]}"; do
+            if [ -f "release-assets/$file" ]; then
+              size=$(stat -c%s "release-assets/$file" 2>/dev/null || wc -c < "release-assets/$file")
+              echo "✅ $file - ${size} bytes"
+            else
+              echo "❌ Missing: $file"
+              missing_files=$((missing_files + 1))
+            fi
+          done
+          
+          if [ $missing_files -gt 0 ]; then
+            echo "⚠️ Warning: $missing_files release assets are missing"
+            echo "Release will proceed with available assets"
+          fi
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/*
+          name: BCAI Release ${{ github.ref_name }}
+          body: |
+            # BCAI Release ${{ github.ref_name }}
+            
+            ## 🚀 What's New
+            
+            This release includes pre-built binaries for all supported platforms:
+            
+            - **Linux x64**: Complete BCAI node package for Linux systems
+            - **macOS x64**: Native Intel Mac support 
+            - **macOS ARM64**: Optimized for Apple Silicon Macs
+            - **Windows x64**: Full Windows compatibility
+            
+            ## 📦 Downloads
+            
+            Choose the appropriate package for your platform:
+            
+            | Platform | Download | Size |
+            |----------|----------|------|
+            | 🐧 Linux x64 | [bcai-linux-x64.tar.gz](https://github.com/jtrefon/bcai/releases/download/${{ github.ref_name }}/bcai-linux-x64.tar.gz) | ~25 MB |
+            | 🍎 macOS Intel | [bcai-macos-x64.tar.gz](https://github.com/jtrefon/bcai/releases/download/${{ github.ref_name }}/bcai-macos-x64.tar.gz) | ~28 MB |
+            | 🍎 macOS Apple Silicon | [bcai-macos-arm64.tar.gz](https://github.com/jtrefon/bcai/releases/download/${{ github.ref_name }}/bcai-macos-arm64.tar.gz) | ~26 MB |
+            | 🪟 Windows x64 | [bcai-windows-x64.zip](https://github.com/jtrefon/bcai/releases/download/${{ github.ref_name }}/bcai-windows-x64.zip) | ~30 MB |
+            
+            ## 🔧 Installation
+            
+            ### Linux/macOS
+            ```bash
+            # Extract the package
+            tar -xzf bcai-*.tar.gz
+            cd bcai-*
+            
+            # Start a node
+            ./start-node.sh
+            ```
+            
+            ### Windows
+            ```cmd
+            # Extract the ZIP file
+            # Navigate to extracted folder
+            
+            # Start a node
+            start-node.bat
+            ```
+            
+            ## 🏃 Quick Start
+            
+            1. **Generate Keys**: `./keygen --help`
+            2. **Start Runtime**: `./runtime --help` 
+            3. **Launch Dashboard**: `./dashboard --help`
+            
+            ## 📖 Documentation
+            
+            - [Setup Guide](https://github.com/jtrefon/bcai/blob/main/SETUP.md)
+            - [VM Guide](https://github.com/jtrefon/bcai/blob/main/docs/ENHANCED_VM_GUIDE.md)
+            - [Website](https://jtrefon.github.io/bcai/)
+            
+            ## 🔗 Links
+            
+            - **Git SHA**: `${{ github.sha }}`
+            - **Build Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            - **Pipeline**: [View workflow run](https://github.com/jtrefon/bcai/actions/runs/${{ github.run_id }})
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
