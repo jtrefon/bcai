@@ -67,3 +67,38 @@ While the codebase has a solid architectural structure, this analysis reveals th
 
 This gap analysis should temper overly optimistic impressions from Phase summary docs
 and guide realistic planning for next development phases.
+
+## 3. "Ruthless Pruning" of Placeholder Code (Phase 1 Refactoring)
+
+Following the initial analysis, a major refactoring effort was undertaken to remove non-functional placeholder code and simplify the codebase. This "ruthless pruning" targeted modules that were essentially empty shells, retaining only their core data model definitions. This provides a cleaner, more honest foundation for future development.
+
+**Completed Actions:**
+*   **Stripped Implementations:** The following modules were stripped of their placeholder implementation logic (`struct`s with methods, `impl` blocks, `tokio` loops, etc.), leaving only the `struct` and `enum` definitions that constitute the module's data model:
+    *   `src/ml/ml_monitoring.rs`
+    *   `src/ml/inference_engine.rs`
+    *   `src/ml/model_registry.rs`
+    *   `src/ml/pipeline_orchestrator.rs`
+    *   `src/ml/distributed_training.rs`
+    *   `runtime/src/advanced_governance.rs`
+    *   `runtime/src/monitoring.rs`
+    *   `runtime/src/python_bridge.rs`
+    *   `runtime/src/consensus_engine.rs`
+    *   `runtime/src/cross_chain_bridge.rs`
+    *   `runtime/src/federated.rs`
+    *   `runtime/src/federated_network_coordinator.rs`
+    *   `runtime/src/performance_optimizer.rs`
+    *   `runtime/src/security_layer.rs`
+    *   `runtime/decentralized_filesystem.rs` (Refactored to `runtime/src/dfs/`)
+
+*   **Codebase Cleanup:** This effort significantly reduced the line count and complexity of the codebase, removed numerous `TODO` markers associated with the placeholder code, and resolved all related compilation warnings.
+
+**Outstanding Issues:**
+*   **`runtime/src/distributed_storage.rs`:** Due to persistent, unresolvable tooling failures, this file could not be automatically refactored. **It is recommended to manually replace the contents of this file** with the corrected, data-model-only version to finalize the pruning process.
+
+## 4. Next Steps & Recommendations
+
+1.  **Complete Pruning:** Manually fix the `runtime/src/distributed_storage.rs` file as noted above.
+2.  **P2P Layer Implementation:** Implement a fully functional P2P layer using `libp2p`. This is the foundational prerequisite for all other distributed features.
+3.  **PoUW Consensus:** Implement the core Proof-of-Useful-Work consensus logic. This includes defining the ML task, implementing the mining/validation loop, and creating the block reward structure.
+4.  **State Machine & Economics:** Build out the blockchain's state transition function, including transaction processing, account updates, fees, and miner rewards.
+5.  **Re-implement Core Features:** With a stable foundation, begin the methodical, test-driven implementation of the modules that were previously pruned, starting with the most critical components like distributed storage and large data transfer.
