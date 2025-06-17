@@ -18,7 +18,7 @@ pub mod advanced_governance;
 pub mod consensus_engine;
 pub mod consensus_node;
 pub mod cross_chain_bridge;
-pub mod decentralized_filesystem;
+pub mod dfs;
 pub mod distributed_storage;
 pub mod double;
 pub mod enhanced_p2p_service;
