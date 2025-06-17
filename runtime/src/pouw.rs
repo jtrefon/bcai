@@ -1,3 +1,7 @@
+//! Defines the Proof-of-Useful-Work (PoUW) data structures.
+//! PoUW replaces traditional energy-wasting proof-of-work with useful
+//! computation, such as training machine learning models.
+
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -5,24 +9,65 @@ use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 use hex;
 
-/// A Proof-of-Useful-Work task
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    pub difficulty: u64,
-    pub data: Vec<u8>,
-    pub target: String,
-    pub a: Vec<Vec<u8>>,
-    pub b: Vec<Vec<u8>>,
-    pub timestamp: u64,
-    pub challenge: Vec<u8>,
+/// A PoUW Task, which defines a machine learning job to be completed.
+/// This represents the "work" to be done.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PoUWTask {
+    /// A unique identifier for the machine learning model architecture.
+    pub model_id: String,
+    /// An identifier for the dataset to be used for training.
+    pub dataset_id: String,
+    /// The number of training epochs required.
+    pub epochs: u32,
 }
 
-/// Solution to a PoUW task
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Solution {
-    pub result: Vec<Vec<u32>>, // matrix multiplication result
+/// A PoUW Solution, which provides the result of a completed ML task.
+/// This is the "proof" that the work was done.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PoUWSolution {
+    /// A hash of the resulting trained model weights.
+    pub trained_model_hash: String,
+    /// The accuracy achieved by the model on a validation set.
+    /// Represented as an integer (e.g., 9876 for 98.76% accuracy).
+    pub accuracy: u32,
+    /// A nonce used by the worker, can be used to add uniqueness.
     pub nonce: u64,
-    pub computation_time: u64, // Time spent computing (anti-precomputation)
+}
+
+impl PoUWTask {
+    /// Creates a new PoUW task.
+    pub fn new(model_id: String, dataset_id: String, epochs: u32) -> Self {
+        Self {
+            model_id,
+            dataset_id,
+            epochs,
+        }
+    }
+
+    /// (Mock) "Solves" the PoUW task by returning a placeholder solution.
+    /// In a real system, this would trigger an intensive ML training process.
+    pub fn solve(&self) -> PoUWSolution {
+        // Placeholder logic: This should be replaced by a real ML training worker.
+        // For now, we return a deterministic, fake result for demonstration.
+        let model_hash_input = format!("{}:{}:{}", self.model_id, self.dataset_id, self.epochs);
+        let trained_model_hash = hex::encode(sha2::Sha256::digest(model_hash_input.as_bytes()));
+
+        PoUWSolution {
+            trained_model_hash,
+            accuracy: 9500, // Representing 95.00%
+            nonce: rand::random(),
+        }
+    }
+
+    /// (Mock) "Verifies" a PoUW solution.
+    /// In a real system, this would involve a consensus mechanism to validate
+    /// the claimed accuracy of the trained model, potentially by re-running
+    /// inference on a small, secret test set.
+    pub fn verify(&self, solution: &PoUWSolution) -> bool {
+        // Placeholder logic: For now, we accept any solution that appears valid.
+        // A real implementation needs a robust validation mechanism.
+        !solution.trained_model_hash.is_empty() && solution.accuracy <= 10000
+    }
 }
 
 /// Configuration for PoUW security parameters
@@ -44,7 +89,7 @@ impl Default for PoUWConfig {
 }
 
 /// Generate a PoUW task with matrix multiplication (simple version)
-pub fn generate_task(difficulty: u64) -> Task {
+pub fn generate_task(difficulty: u64) -> PoUWTask {
     let size = 4; // 4x4 matrices for testing
     let mut rng = StdRng::from_entropy();
     
@@ -63,19 +108,15 @@ pub fn generate_task(difficulty: u64) -> Task {
     
     let challenge: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
     
-    Task {
-        difficulty,
-        data: vec![1, 2, 3, 4], // Simple placeholder for compatibility
-        target: format!("target_{}", difficulty),
-        a,
-        b,
-        timestamp,
-        challenge,
+    PoUWTask {
+        model_id: format!("model_{}", difficulty),
+        dataset_id: format!("dataset_{}", difficulty),
+        epochs: difficulty as u32,
     }
 }
 
 /// Generate a PoUW task with matrix multiplication (with timestamp)
-pub fn generate_task_with_timestamp(difficulty: u64, timestamp: u64) -> Task {
+pub fn generate_task_with_timestamp(difficulty: u64, timestamp: u64) -> PoUWTask {
     let size = 4; // 4x4 matrices for testing
     let mut rng = StdRng::seed_from_u64(timestamp); // Use timestamp as seed for determinism
     
@@ -89,14 +130,10 @@ pub fn generate_task_with_timestamp(difficulty: u64, timestamp: u64) -> Task {
     
     let challenge: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
     
-    Task {
-        difficulty,
-        data: vec![1, 2, 3, 4], // Simple placeholder for compatibility
-        target: format!("target_{}", difficulty),
-        a,
-        b,
-        timestamp,
-        challenge,
+    PoUWTask {
+        model_id: format!("model_{}", difficulty),
+        dataset_id: format!("dataset_{}", difficulty),
+        epochs: difficulty as u32,
     }
 }
 
@@ -145,22 +182,13 @@ fn validate_computation_time(computation_time: u64, config: &PoUWConfig) -> bool
 }
 
 /// Create cryptographic commitment to task parameters for integrity.
-fn create_task_commitment(task: &Task) -> [u8; 32] {
+fn create_task_commitment(task: &PoUWTask) -> [u8; 32] {
     let mut hasher = Sha256::new();
 
     // Hash all task components for integrity
-    for row in &task.a {
-        for &val in row {
-            hasher.update([val]);
-        }
-    }
-    for row in &task.b {
-        for &val in row {
-            hasher.update([val]);
-        }
-    }
-    hasher.update(task.timestamp.to_le_bytes());
-    hasher.update(task.challenge.clone());
+    hasher.update(task.model_id.as_bytes());
+    hasher.update(task.dataset_id.as_bytes());
+    hasher.update(task.epochs.to_le_bytes());
 
     hasher.finalize().into()
 }
@@ -171,7 +199,7 @@ fn flatten_matrix(mat: &[Vec<u32>]) -> Vec<u8> {
 }
 
 /// **ENHANCED**: Solve a task with proper security measures and time tracking.
-pub fn solve_enhanced(task: &Task, difficulty: u32) -> Solution {
+pub fn solve_enhanced(task: &PoUWTask, difficulty: u32) -> PoUWSolution {
     let start_time = std::time::Instant::now();
     let result = multiply(&task.a, &task.b);
     let bytes = flatten_matrix(&result);
@@ -186,19 +214,23 @@ pub fn solve_enhanced(task: &Task, difficulty: u32) -> Solution {
 
         if meets_difficulty(&hash, difficulty) {
             let computation_time = start_time.elapsed().as_millis() as u64;
-            return Solution { result, nonce, computation_time };
+            return PoUWSolution {
+                trained_model_hash: hex::encode(hash),
+                accuracy: 9500, // Placeholder accuracy
+                nonce,
+            };
         }
     }
     unreachable!();
 }
 
 /// Solve function with difficulty parameter (consensus_node.rs API)
-pub fn solve_with_difficulty(task: &Task, difficulty: u32) -> Solution {
+pub fn solve_with_difficulty(task: &PoUWTask, difficulty: u32) -> PoUWSolution {
     solve_enhanced(task, difficulty)
 }
 
 /// Simple solve function for backward compatibility
-pub fn solve(task: &Task) -> Option<u64> {
+pub fn solve(task: &PoUWTask) -> Option<u64> {
     // For simple tasks without matrix data, return a simple solution
     if task.a.is_empty() || task.b.is_empty() {
         if task.difficulty <= 100 {
@@ -214,12 +246,12 @@ pub fn solve(task: &Task) -> Option<u64> {
 }
 
 /// Verify function with solution parameter (consensus_node.rs API)
-pub fn verify_with_solution(task: &Task, solution: &Solution, difficulty: u32) -> bool {
+pub fn verify_with_solution(task: &PoUWTask, solution: &PoUWSolution, difficulty: u32) -> bool {
     verify_enhanced(task, solution, difficulty)
 }
 
 /// Simple verify function for backward compatibility
-pub fn verify(task: &Task, nonce: u64) -> bool {
+pub fn verify(task: &PoUWTask, nonce: u64) -> bool {
     // For simple tasks without matrix data, use simple verification
     if task.a.is_empty() || task.b.is_empty() {
         nonce == 42 && task.difficulty <= 100
@@ -234,8 +266,8 @@ pub fn verify(task: &Task, nonce: u64) -> bool {
 /// **ENHANCED**: Comprehensive verification with security checks.
 /// Uses relaxed configuration for backward compatibility with existing tests.
 pub fn verify_with_config(
-    task: &Task,
-    solution: &Solution,
+    task: &PoUWTask,
+    solution: &PoUWSolution,
     difficulty: u32,
     config: &PoUWConfig,
 ) -> bool {
@@ -290,7 +322,7 @@ pub fn calculate_adaptive_difficulty(
 
 /// **ENHANCED**: Comprehensive verification with security checks.
 /// Uses relaxed configuration for backward compatibility with existing tests.
-pub fn verify_enhanced(task: &Task, solution: &Solution, difficulty: u32) -> bool {
+pub fn verify_enhanced(task: &PoUWTask, solution: &PoUWSolution, difficulty: u32) -> bool {
     // Use relaxed config for backward compatibility with existing tests
     let relaxed_config = PoUWConfig {
         base_difficulty: 0x0000ffff,
@@ -301,12 +333,12 @@ pub fn verify_enhanced(task: &Task, solution: &Solution, difficulty: u32) -> boo
 }
 
 /// **NEW**: Verify with strict production security parameters.
-pub fn verify_production(task: &Task, solution: &Solution, difficulty: u32) -> bool {
+pub fn verify_production(task: &PoUWTask, solution: &PoUWSolution, difficulty: u32) -> bool {
     verify_with_config(task, solution, difficulty, &PoUWConfig::default())
 }
 
 /// Solve a task while measuring execution time.
-pub fn solve_profile(task: &Task, difficulty: u32) -> (Solution, std::time::Duration) {
+pub fn solve_profile(task: &PoUWTask, difficulty: u32) -> (PoUWSolution, std::time::Duration) {
     let start = std::time::Instant::now();
     let sol = solve_enhanced(task, difficulty);
     let dur = start.elapsed();
@@ -362,63 +394,5 @@ mod tests {
             adjusted_extreme >= current.saturating_sub(current / 4),
             "Difficulty adjustment should be clamped"
         );
-    }
-}
-
-/// A simple Proof-of-Work task.
-/// In a real PoUW system, this would be a machine learning task.
-/// For now, it's a standard cryptographic puzzle.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct PoUWTask {
-    pub challenge: String,
-    /// Number of leading zeros required in the solution hash.
-    pub difficulty: u32,
-}
-
-/// The solution to a PoUWTask.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct PoUWSolution {
-    pub nonce: u64,
-    pub solution_hash: String,
-}
-
-impl PoUWTask {
-    /// Creates a new PoW task from the previous block's hash and the current transaction data.
-    pub fn new(prev_block_hash: &str, transactions_root: &str, difficulty: u32) -> Self {
-        // The challenge is a combination of the parent hash and the merkle root of transactions.
-        let challenge = format!("{}{}", prev_block_hash, transactions_root);
-        PoUWTask {
-            challenge,
-            difficulty,
-        }
-    }
-
-    /// Solves the PoW puzzle. This is computationally intensive and is the "work" in PoW.
-    /// In a real system, this would be done by competing miners.
-    pub fn solve(&self) -> PoUWSolution {
-        let mut nonce = 0;
-        loop {
-            let attempt = format!("{}{}", self.challenge, nonce);
-            let hash = Sha256::digest(attempt.as_bytes());
-            let hash_hex = hex::encode(hash);
-
-            if hash_hex.starts_with(&"0".repeat(self.difficulty as usize)) {
-                return PoUWSolution {
-                    nonce,
-                    solution_hash: hash_hex,
-                };
-            }
-            nonce += 1;
-        }
-    }
-
-    /// Verifies if a given solution is valid for this task.
-    pub fn verify(&self, solution: &PoUWSolution) -> bool {
-        let attempt = format!("{}{}", self.challenge, solution.nonce);
-        let hash = Sha256::digest(attempt.as_bytes());
-        let hash_hex = hex::encode(hash);
-
-        hash_hex == solution.solution_hash
-            && hash_hex.starts_with(&"0".repeat(self.difficulty as usize))
     }
 }

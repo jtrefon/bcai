@@ -15,11 +15,22 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{UnixListener, UnixStream},
 };
+use std::{
+    fs,
+    process,
+};
 
 pub const SOCKET_PATH: &str = "/tmp/bcai_devnet.sock";
+pub const PID_FILE: &str = "/tmp/bcai_devnet.pid";
 
 /// The main entry point for the daemon process.
 pub async fn daemon_main() {
+    // Write the PID to the file after the daemon has successfully started.
+    if let Err(e) = fs::write(PID_FILE, process::id().to_string()) {
+        error!("Failed to write PID file: {}", e);
+        return;
+    }
+    
     // Initialize the blockchain and mempool
     let blockchain = Arc::new(Mutex::new(Blockchain::new(Default::default())));
     let mempool = Arc::new(Mutex::new(Vec::<Transaction>::new()));

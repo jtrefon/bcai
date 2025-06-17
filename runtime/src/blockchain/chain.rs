@@ -35,12 +35,14 @@ impl Blockchain {
     /// Creates the very first block in the chain.
     fn create_genesis_block(&mut self) {
         let genesis_task = PoUWTask {
-            challenge: "genesis_challenge".to_string(),
-            difficulty: 0,
+            model_id: "genesis_model".to_string(),
+            dataset_id: "genesis_data".to_string(),
+            epochs: 0,
         };
         let genesis_solution = PoUWSolution {
+            trained_model_hash: "0".repeat(64),
+            accuracy: 10000,
             nonce: 0,
-            solution_hash: "0".repeat(64),
         };
         let genesis_block = Block::new(
             0,

@@ -57,7 +57,7 @@ impl Block {
             self.timestamp,
             tx_root,
             self.difficulty,
-            self.solution.solution_hash
+            self.solution.trained_model_hash
         );
         hasher.update(contents);
         hex::encode(hasher.finalize())

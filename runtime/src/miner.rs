@@ -40,17 +40,19 @@ pub fn mine_block(
     let tx_root = Transaction::merkle_root(&transactions_to_include);
     let new_block_index = (prev_block.index + 1) as u32;
     
-    // TODO: Implement dynamic difficulty adjustment.
-    let difficulty = 2;
-
-    let pouw_task = PoUWTask::new(&prev_block.hash, &tx_root, difficulty);
+    // TODO: This should come from a job queue or similar mechanism.
+    let pouw_task = PoUWTask::new(
+        "model_1".to_string(),
+        "dataset_1".to_string(),
+        10
+    );
     let pouw_solution = pouw_task.solve();
 
     let new_block = Block::new(
         new_block_index,
         prev_block.hash.clone(),
         transactions_to_include,
-        difficulty,
+        0, // Difficulty is part of the task now, not the block
         miner_pubkey,
         pouw_task,
         pouw_solution,

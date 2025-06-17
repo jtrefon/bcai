@@ -4,9 +4,11 @@ use clap::Parser;
 use fork::{daemon, Fork};
 use log::{error, info};
 use std::{
+    fs,
     io::{Read, Write},
     net::UnixStream,
     process,
+    time::Duration,
 };
 
 // Declare the new modules
@@ -15,7 +17,7 @@ mod daemon;
 
 // Use the structs and functions from the new modules
 use cli::{Cli, Commands};
-use daemon::{daemon_main, SOCKET_PATH};
+use daemon::{daemon_main, PID_FILE, SOCKET_PATH};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,24 +40,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn start_daemon() {
+    if std::path::Path::new(PID_FILE).exists() {
+        eprintln!("Daemon is already running. Use 'devnet stop' first.");
+        return;
+    }
+
     info!("Starting devnet daemon...");
     if let Ok(Fork::Child) = daemon(false, false) {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             daemon_main().await;
         });
+        // The child process will exit here.
     }
-    info!("Daemon process started.");
+    // Give the daemon a moment to start and write its PID file.
+    std::thread::sleep(Duration::from_millis(500));
+    if std::path::Path::new(PID_FILE).exists() {
+        info!("Daemon process started successfully.");
+    } else {
+        error!("Failed to start daemon process.");
+    }
 }
 
 fn stop_daemon() {
-    // A simple way to stop is to remove the socket file. The daemon will then exit.
-    // A more robust implementation would use a proper PID file or a 'stop' command.
     info!("Stopping devnet daemon...");
-    match std::fs::remove_file(SOCKET_PATH) {
-        Ok(_) => info!("Daemon stopped successfully."),
-        Err(e) => error!("Failed to stop daemon by removing socket: {}. It may not be running.", e),
+    let pid_path = std::path::Path::new(PID_FILE);
+    if !pid_path.exists() {
+        error!("Daemon is not running (PID file not found).");
+        // Clean up socket file just in case it's orphaned.
+        let _ = fs::remove_file(SOCKET_PATH);
+        return;
     }
+
+    match fs::read_to_string(pid_path) {
+        Ok(pid_str) => {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                unsafe {
+                    libc::kill(pid, libc::SIGTERM);
+                }
+                info!("Sent SIGTERM to daemon process (PID {}).", pid);
+            } else {
+                error!("Invalid PID found in PID file: {}", pid_str);
+            }
+        }
+        Err(e) => error!("Failed to read PID file: {}", e),
+    }
+
+    // Clean up both files.
+    let _ = fs::remove_file(PID_FILE);
+    let _ = fs::remove_file(SOCKET_PATH);
+    info!("Daemon stopped and resources cleaned up.");
 }
 
 async fn handle_cli_command(
