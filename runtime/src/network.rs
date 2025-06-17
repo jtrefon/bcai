@@ -8,7 +8,7 @@ use crate::federated::{FederatedEngine, ModelParameters, FederatedStats};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
-use crate::blockchain::{Blockchain, BlockchainConfig, BlockchainError};
+use crate::blockchain::{Blockchain, BlockchainConfig, BlockchainError, Transaction};
 use crate::wire::WireMessage;
 use std::sync::{Arc, Mutex};
 
@@ -87,12 +87,14 @@ pub struct NetworkCoordinator {
     pending_evaluations: HashMap<u64, Vec<(String, bool)>>, // job_id -> (evaluator_id, is_valid)
     network_block_height: u64,
     pub blockchain: Arc<Mutex<Blockchain>>,
+    pub mempool: Arc<Mutex<Vec<Transaction>>>,
 }
 
 impl NetworkCoordinator {
     /// Create a new network coordinator
     pub fn new(local_node: UnifiedNode) -> Self {
         let blockchain = Arc::new(Mutex::new(Blockchain::new(BlockchainConfig::default())));
+        let mempool = Arc::new(Mutex::new(Vec::new()));
         Self {
             local_node,
             peer_capabilities: HashMap::new(),
@@ -100,6 +102,7 @@ impl NetworkCoordinator {
             pending_evaluations: HashMap::new(),
             network_block_height: 1,
             blockchain,
+            mempool,
         }
     }
 
@@ -117,9 +120,17 @@ impl NetworkCoordinator {
                 // TODO: Propagate block to peers? Libp2p gossipsub handles this.
             }
             WireMessage::Transaction(tx) => {
-                println!("Received new transaction: {:?}", tx.hash());
-                let mut bc = self.blockchain.lock().unwrap();
-                bc.add_transaction(tx)?;
+                println!("Received new transaction: {}", tx.hash());
+                
+                // --- SIGNATURE VERIFICATION ---
+                if !tx.verify_signature() {
+                    return Err(NetworkError::InvalidMessage);
+                }
+                
+                let mut mempool = self.mempool.lock().unwrap();
+                if !mempool.contains(&tx) {
+                    mempool.push(tx);
+                }
             }
             WireMessage::GetBlocks { from_height } => {
                 let bc = self.blockchain.lock().unwrap();
@@ -312,6 +323,7 @@ impl NetworkCoordinator {
     /// Get network statistics
     pub fn get_network_stats(&self) -> NetworkStats {
         let bc = self.blockchain.lock().unwrap();
+        let mempool = self.mempool.lock().unwrap();
         NetworkStats {
             connected_peers: self.peer_capabilities.len(),
             active_jobs: self
@@ -330,6 +342,7 @@ impl NetworkCoordinator {
                 .filter(|job| job.status == crate::node::JobStatus::Completed)
                 .count(),
             network_block_height: bc.get_tip().height,
+            pending_transactions: mempool.len(),
             local_node_stats: self.local_node.get_stats(),
         }
     }
@@ -372,12 +385,13 @@ impl NetworkCoordinator {
 }
 
 /// Network statistics for monitoring
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone)]
 pub struct NetworkStats {
     pub connected_peers: usize,
     pub active_jobs: usize,
     pub completed_jobs: usize,
     pub network_block_height: u64,
+    pub pending_transactions: usize,
     pub local_node_stats: crate::node::NodeStats,
 }
 

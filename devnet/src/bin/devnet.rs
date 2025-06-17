@@ -17,6 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use runtime::network::NetworkCoordinator;
+use runtime::blockchain::Transaction;
+use rand;
+use schnorrkel::{SecretKey, PublicKey};
+use hex;
 
 const SOCKET_PATH: &str = "/tmp/bcai_devnet.sock";
 const PID_FILE: &str = "/tmp/bcai_devnet.pid";
@@ -61,10 +65,29 @@ enum Commands {
 enum P2pCommands {
     /// List connected peers
     Peers,
-    /// Send a message on a topic
+    /// Send a message on a topic (for debugging)
     Send { topic: String, message: String },
     /// Mine a new block and broadcast it
     Mine,
+    /// Manage transactions
+    Tx {
+        #[command(subcommand)]
+        tx_command: TxCommands,
+    },
+}
+
+#[derive(Subcommand, Serialize, Deserialize, Debug)]
+enum TxCommands {
+    /// Create and broadcast a new transfer transaction.
+    /// Use the 'keygen' tool to create a keypair.
+    Create {
+        /// Path to the secret key file of the sender (e.g., 'wallet.key')
+        from_secret_key_file: PathBuf,
+        /// Public key of the recipient (hex-encoded)
+        to_pubkey: String,
+        /// Amount to transfer
+        amount: u64,
+    },
 }
 
 // Main entry point
@@ -256,14 +279,18 @@ async fn handle_daemon_command(
         P2pCommands::Mine => {
             let coordinator = network_coordinator.lock().await;
             let mut blockchain = coordinator.blockchain.lock().unwrap();
+            let mut mempool = coordinator.mempool.lock().unwrap();
 
-            // 1. Get the current tip of the chain
+            // 1. Get transactions from the mempool
+            let transactions_to_include = mempool.clone();
+            
+            // 2. Get the current tip of the chain
             let tip = blockchain.get_tip();
             let new_height = tip.height + 1;
             let prev_hash = tip.hash.clone();
             let difficulty = blockchain.calculate_next_difficulty();
 
-            // 2. Create a dummy task and solution for PoUW
+            // 3. Create a dummy task and solution for PoUW
             let task = runtime::pouw::generate_task(1, 1);
             let solution = runtime::pouw::Solution {
                 nonce: 123,
@@ -271,30 +298,82 @@ async fn handle_daemon_command(
                 computation_time: 1,
             };
             
-            // 3. Create a new block
+            // 4. Create a new block with the transactions
             let new_block = runtime::blockchain::Block::new(
                 new_height,
                 prev_hash,
-                vec![], // No transactions for now
+                transactions_to_include.clone(),
                 difficulty,
                 "devnet-miner".to_string(),
                 task,
                 solution,
             );
 
-            // 4. Add the block to our own chain
+            // 5. Add the block to our own chain
             let block_hash = new_block.hash.clone();
             if let Err(e) = blockchain.add_block(new_block.clone()) {
                 return format!("Error adding block to local chain: {}", e);
             }
 
-            // 5. Broadcast the new block to the network
+            // 6. Clear the mempool
+            mempool.retain(|tx| !transactions_to_include.contains(tx));
+            
+            // 7. Broadcast the new block to the network
             let wire_message = WireMessage::Block(new_block);
             let message_bytes = bincode::serialize(&wire_message).unwrap();
 
             match handle.send_message("bcai_global".to_string(), message_bytes).await {
-                Ok(_) => format!("Mined and broadcast new block: {}", block_hash),
+                Ok(_) => format!(
+                    "Mined and broadcast new block: {} ({} txns)",
+                    block_hash,
+                    transactions_to_include.len()
+                ),
                 Err(e) => format!("Error broadcasting block: {}", e),
+            }
+        }
+        P2pCommands::Tx { tx_command } => {
+            match tx_command {
+                TxCommands::Create { from_secret_key_file, to_pubkey, amount } => {
+                    // 1. Read the secret key from file
+                    let secret_key_bytes = match std::fs::read(from_secret_key_file) {
+                        Ok(bytes) => bytes,
+                        Err(e) => return format!("Error reading secret key file: {}", e),
+                    };
+                    let secret_key = match SecretKey::from_bytes(&secret_key_bytes) {
+                        Ok(sk) => sk,
+                        Err(_) => return "Invalid secret key file".to_string(),
+                    };
+
+                    // 2. Decode the recipient's public key
+                    let to_pubkey_bytes = match hex::decode(to_pubkey) {
+                        Ok(bytes) => bytes,
+                        Err(_) => return "Invalid recipient public key format".to_string(),
+                    };
+                    let to_public_key = match PublicKey::from_bytes(&to_pubkey_bytes) {
+                        Ok(pk) => pk,
+                        Err(_) => return "Invalid recipient public key".to_string(),
+                    };
+
+                    // 3. Get the next nonce for the sender
+                    let nonce = {
+                        let coordinator = network_coordinator.lock().await;
+                        let blockchain = coordinator.blockchain.lock().unwrap();
+                        let sender_pubkey_hex = hex::encode(secret_key.public_key().to_bytes());
+                        blockchain.get_nonce(&sender_pubkey_hex) + 1
+                    };
+
+                    // 4. Create and sign the transaction
+                    let tx = Transaction::new_transfer(&secret_key, to_public_key, amount, 1, nonce);
+
+                    // 5. Broadcast it
+                    let wire_message = WireMessage::Transaction(tx.clone());
+                    let message_bytes = bincode::serialize(&wire_message).unwrap();
+
+                    match handle.send_message("bcai_global".to_string(), message_bytes).await {
+                        Ok(_) => format!("Broadcast transaction: {}", tx.hash()),
+                        Err(e) => format!("Error broadcasting transaction: {}", e),
+                    }
+                }
             }
         }
     }

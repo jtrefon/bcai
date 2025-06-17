@@ -3,6 +3,10 @@ use crate::token::TokenLedger;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
+use schnorrkel::{Signature, PublicKey, SecretKey, signing_context};
+use hex;
+
+const SIGNING_CONTEXT: &[u8] = b"bcai-transaction";
 
 #[derive(Debug, Error)]
 pub enum BlockchainError {
@@ -98,14 +102,15 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Transaction {
-    Transfer { 
-        from: String, 
-        to: String, 
-        amount: u64, 
-        fee: u64, 
-        nonce: u64 
+    Transfer {
+        signer: PublicKey,
+        to: PublicKey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        signature: Signature,
     },
     Stake { 
         validator: String, 
@@ -140,10 +145,62 @@ pub enum Transaction {
 }
 
 impl Transaction {
+    pub fn new_transfer(
+        from_secret: &SecretKey,
+        to: PublicKey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+    ) -> Self {
+        let signer = from_secret.public_key();
+        let mut tx = Self::Transfer {
+            signer,
+            to,
+            amount,
+            fee,
+            nonce,
+            // Placeholder signature
+            signature: from_secret.sign(signing_context(SIGNING_CONTEXT).bytes(b"placeholder")),
+        };
+
+        let message = tx.to_signable_bytes();
+        let signature = from_secret.sign(signing_context(SIGNING_CONTEXT).bytes(&message));
+        
+        // Replace placeholder with the real signature
+        if let Self::Transfer { signature: s, .. } = &mut tx {
+            *s = signature;
+        }
+        tx
+    }
+
+    pub fn to_signable_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Transfer { signer, to, amount, fee, nonce, .. } => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"transfer");
+                bytes.extend_from_slice(&signer.to_bytes());
+                bytes.extend_from_slice(&to.to_bytes());
+                bytes.extend_from_slice(&amount.to_le_bytes());
+                bytes.extend_from_slice(&fee.to_le_bytes());
+                bytes.extend_from_slice(&nonce.to_le_bytes());
+                bytes
+            }
+        }
+    }
+
+    pub fn verify_signature(&self) -> bool {
+        match self {
+            Self::Transfer { signer, signature, .. } => {
+                let message = self.to_signable_bytes();
+                signer.verify(signing_context(SIGNING_CONTEXT).bytes(&message), signature).is_ok()
+            }
+        }
+    }
+    
     pub fn hash(&self) -> String {
         match self {
-            Transaction::Transfer { from, to, amount, nonce, .. } => {
-                format!("tx_transfer_{}_{}_{}_{}", from, to, amount, nonce)
+            Transaction::Transfer { signer, to, amount, nonce, .. } => {
+                format!("tx_transfer_{:?}_{:?}_{}_{}", signer, to, amount, nonce)
             }
             Transaction::Stake { validator, amount, nonce } => {
                 format!("tx_stake_{}_{}_{}",validator, amount, nonce)
@@ -163,25 +220,20 @@ impl Transaction {
         }
     }
     
-    pub fn get_sender(&self) -> &str {
+    pub fn get_sender_pubkey(&self) -> &PublicKey {
         match self {
-            Transaction::Transfer { from, .. } => from,
-            Transaction::Stake { validator, .. } => validator,
-            Transaction::JobPosting { poster, .. } => poster,
-            Transaction::TrainingSubmission { worker, .. } => worker,
-            Transaction::ValidationVote { validator, .. } => validator,
-            Transaction::RewardDistribution { .. } => "system", // System transaction
+            Transaction::Transfer { signer, .. } => signer,
         }
+    }
+
+    // get_sender now returns a string representation for compatibility with state map keys
+    pub fn get_sender(&self) -> String {
+        hex::encode(self.get_sender_pubkey().to_bytes())
     }
     
     pub fn get_nonce(&self) -> u64 {
         match self {
-            Transaction::Transfer { nonce, .. } |
-            Transaction::Stake { nonce, .. } |
-            Transaction::JobPosting { nonce, .. } |
-            Transaction::TrainingSubmission { nonce, .. } |
-            Transaction::ValidationVote { nonce, .. } |
-            Transaction::RewardDistribution { nonce, .. } => *nonce,
+            Transaction::Transfer { nonce, .. } => *nonce,
         }
     }
 }
@@ -296,46 +348,35 @@ impl Blockchain {
     }
     
     fn validate_transaction(&self, tx: &Transaction) -> Result<(), BlockchainError> {
-        match tx {
-            Transaction::Transfer { from, amount, fee, .. } => {
-                let balance = self.state.balance(from);
-                if balance < amount + fee {
-                    return Err(BlockchainError::InsufficientBalance);
-                }
-            }
-            Transaction::Stake { validator, amount, .. } => {
-                let balance = self.state.balance(validator);
-                if balance < *amount {
-                    return Err(BlockchainError::InsufficientBalance);
-                }
-            }
-            // Add validation for other transaction types
-            _ => {}
+        if !tx.verify_signature() {
+            return Err(BlockchainError::TransactionValidation("Invalid signature".to_string()));
         }
+
+        let sender_address = tx.get_sender();
+        let nonce = self.get_nonce(&sender_address);
+        if tx.get_nonce() <= nonce {
+            return Err(BlockchainError::InvalidNonce);
+        }
+
+        if let Transaction::Transfer { amount, fee, .. } = tx {
+            let balance = self.get_balance(&sender_address);
+            if balance < amount + fee {
+                return Err(BlockchainError::InsufficientBalance);
+            }
+        }
+        
         Ok(())
     }
     
     fn apply_transaction(&mut self, tx: &Transaction) -> Result<(), BlockchainError> {
-        match tx {
-            Transaction::Transfer { from, to, amount, fee, .. } => {
-                self.state.transfer(from, to, *amount)
-                    .map_err(|_| BlockchainError::InsufficientBalance)?;
-                self.state.transfer(from, "fees", *fee)
-                    .map_err(|_| BlockchainError::InsufficientBalance)?;
-            }
-            Transaction::Stake { validator, amount, .. } => {
-                self.state.stake(validator, *amount)
-                    .map_err(|_| BlockchainError::InsufficientBalance)?;
-            }
-            // Handle other transaction types
-            _ => {}
+        let sender_address = tx.get_sender();
+        self.account_nonces.insert(sender_address.clone(), tx.get_nonce());
+
+        if let Transaction::Transfer { to, amount, fee, .. } = tx {
+            self.state.debit(&sender_address, amount + fee)?;
+            self.state.credit(&hex::encode(to.to_bytes()), *amount)?;
         }
-        
-        // Update nonce
-        let sender = tx.get_sender();
-        let nonce = self.account_nonces.get(sender).unwrap_or(&0) + 1;
-        self.account_nonces.insert(sender.to_string(), nonce);
-        
+
         Ok(())
     }
     
