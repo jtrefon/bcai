@@ -2,6 +2,7 @@
 _Version 0.1 – this document provides a technical deep dive into the architecture of the decentralized AI training blockchain, expanding on the whitepaper with more implementation-oriented details and diagrams._
 ### Mission
 Our mission is to deliver the fastest and most secure decentralized platform for AI model training. By uniting hardware around the world, we aim to become the number one resource for training models without centralized bottlenecks. The network prioritizes raw performance and security while enabling virtually unlimited hardware access through decentralization.
+**Note:** This repository is an early prototype. Many components remain incomplete or simulated. See [HONEST_GAP_ANALYSIS.md](HONEST_GAP_ANALYSIS.md) and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the current status.
 
 
 ## Network Topology and Node Interconnectivity
