@@ -8,6 +8,9 @@ use crate::federated::{FederatedEngine, ModelParameters, FederatedStats};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
+use crate::blockchain::{Blockchain, BlockchainConfig, BlockchainError};
+use crate::wire::WireMessage;
+use std::sync::{Arc, Mutex};
 
 /// Network message types for distributed coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,8 +73,10 @@ pub enum NetworkError {
     NetworkPartition,
     #[error("Message validation failed")]
     InvalidMessage,
-    #[error("Consensus failure")]
-    ConsensusFailed,
+    #[error("Consensus failure: {0}")]
+    ConsensusFailed(String),
+    #[error("Blockchain error: {0}")]
+    Blockchain(#[from] BlockchainError),
 }
 
 /// Network coordinator managing distributed operations
@@ -81,18 +86,63 @@ pub struct NetworkCoordinator {
     global_job_registry: HashMap<u64, DistributedJob>,
     pending_evaluations: HashMap<u64, Vec<(String, bool)>>, // job_id -> (evaluator_id, is_valid)
     network_block_height: u64,
+    pub blockchain: Arc<Mutex<Blockchain>>,
 }
 
 impl NetworkCoordinator {
     /// Create a new network coordinator
     pub fn new(local_node: UnifiedNode) -> Self {
+        let blockchain = Arc::new(Mutex::new(Blockchain::new(BlockchainConfig::default())));
         Self {
             local_node,
             peer_capabilities: HashMap::new(),
             global_job_registry: HashMap::new(),
             pending_evaluations: HashMap::new(),
             network_block_height: 1,
+            blockchain,
         }
+    }
+
+    /// Handle incoming messages from the P2P network.
+    pub fn handle_wire_message(
+        &mut self,
+        message: WireMessage,
+        _sender_id: &str,
+    ) -> Result<Option<WireMessage>, NetworkError> {
+        match message {
+            WireMessage::Block(block) => {
+                println!("Received new block (height: {}) from network", block.height);
+                let mut bc = self.blockchain.lock().unwrap();
+                bc.add_block(block)?;
+                // TODO: Propagate block to peers? Libp2p gossipsub handles this.
+            }
+            WireMessage::Transaction(tx) => {
+                println!("Received new transaction: {:?}", tx.hash());
+                let mut bc = self.blockchain.lock().unwrap();
+                bc.add_transaction(tx)?;
+            }
+            WireMessage::GetBlocks { from_height } => {
+                let bc = self.blockchain.lock().unwrap();
+                let tip = bc.get_tip().height;
+                let mut blocks_to_send = Vec::new();
+                for h in from_height..=tip {
+                    if let Some(block) = bc.get_block(h) {
+                        blocks_to_send.push(block.clone());
+                    }
+                }
+                if !blocks_to_send.is_empty() {
+                    return Ok(Some(WireMessage::Blocks(blocks_to_send)));
+                }
+            }
+            WireMessage::Ping => {
+                return Ok(Some(WireMessage::Pong));
+            }
+            _ => {
+                // Other message types are either responses or not yet handled
+            }
+        }
+
+        Ok(None)
     }
 
     /// Handle incoming network message
@@ -261,6 +311,7 @@ impl NetworkCoordinator {
 
     /// Get network statistics
     pub fn get_network_stats(&self) -> NetworkStats {
+        let bc = self.blockchain.lock().unwrap();
         NetworkStats {
             connected_peers: self.peer_capabilities.len(),
             active_jobs: self
@@ -278,7 +329,7 @@ impl NetworkCoordinator {
                 .values()
                 .filter(|job| job.status == crate::node::JobStatus::Completed)
                 .count(),
-            network_block_height: self.network_block_height,
+            network_block_height: bc.get_tip().height,
             local_node_stats: self.local_node.get_stats(),
         }
     }

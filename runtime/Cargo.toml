@@ -111,6 +111,15 @@ uuid = { version = "1.0", features = ["v4"] }
 aes-gcm = "0.10"
 base64 = "0.22"
 
+# P2P networking layer dependencies
+libp2p = { version = "0.53.2", features = ["gossipsub", "kad", "macros", "noise", "tcp", "yamux", "tokio"] }
+log = "0.4.21"
+prost = "0.12.3"
+schnorrkel = "0.11.2"
+toml = "0.8.12"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
 [dev-dependencies]
 criterion = "0.5"
 

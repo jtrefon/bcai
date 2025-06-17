@@ -48,6 +48,7 @@ pub mod python_bridge;
 // Working additional modules
 pub mod token;
 pub mod pouw;
+pub mod wire;
 
 // Re-export core types
 pub use instruction::Instruction;
