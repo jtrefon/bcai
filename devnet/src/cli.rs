@@ -42,6 +42,11 @@ pub enum P2pCommands {
         #[command(subcommand)]
         account_command: AccountCommands,
     },
+    /// Manage computational jobs for PoUW.
+    Job {
+        #[command(subcommand)]
+        job_command: JobCommands,
+    },
 }
 
 #[derive(Subcommand, Serialize, Deserialize, Debug)]
@@ -73,5 +78,21 @@ pub enum AccountCommands {
     Nonce {
         /// Public key of the account (hex-encoded).
         pubkey: String,
+    },
+}
+
+#[derive(Subcommand, Serialize, Deserialize, Debug)]
+pub enum JobCommands {
+    /// Submit a new computational job to the network.
+    Submit {
+        /// A unique identifier for the model to be trained.
+        #[arg(long)]
+        model_id: String,
+        /// A unique identifier for the dataset to be used.
+        #[arg(long)]
+        dataset_id: String,
+        /// The number of training iterations to perform.
+        #[arg(long, default_value_t = 10)]
+        iterations: u32,
     },
 } 

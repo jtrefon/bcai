@@ -1,3 +1,12 @@
+//! The devnet binary for BCAI.
+//!
+//! This crate provides a command-line interface for running a local development
+//! network, interacting with it, and managing the daemon process.
+
+pub mod cli;
+pub mod command_handler;
+pub mod daemon;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

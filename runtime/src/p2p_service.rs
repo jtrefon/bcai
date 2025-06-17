@@ -5,9 +5,10 @@
 
 use crate::network::{NetworkCoordinator, NetworkMessage, NetworkStats};
 use crate::node::{NodeCapability, UnifiedNode};
-use futures::StreamExt;
+use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, StreamExt};
 use libp2p::{
     gossipsub, identity, kad,
+    request_response::{self, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
     Multiaddr, PeerId, Swarm,
 };
@@ -23,12 +24,15 @@ use tokio::sync::{mpsc, oneshot};
 pub struct BCAINetworkBehaviour {
     pub gossipsub: gossipsub::Behaviour,
     pub kademlia: kad::Behaviour<kad::store::MemoryStore>,
+    pub request_response: request_response::Behaviour<WireCodec>,
 }
 
 /// Events emitted by the BCAINetworkBehaviour
+#[derive(Debug)]
 pub enum BCAIBehaviourEvent {
     Gossipsub(gossipsub::Event),
     Kademlia(kad::Event),
+    RequestResponse(request_response::Event<WireMessage, WireMessage>),
 }
 
 impl From<gossipsub::Event> for BCAIBehaviourEvent {
@@ -40,6 +44,12 @@ impl From<gossipsub::Event> for BCAIBehaviourEvent {
 impl From<kad::Event> for BCAIBehaviourEvent {
     fn from(event: kad::Event) -> Self {
         BCAIBehaviourEvent::Kademlia(event)
+    }
+}
+
+impl From<request_response::Event<WireMessage, WireMessage>> for BCAIBehaviourEvent {
+    fn from(event: request_response::Event<WireMessage, WireMessage>) -> Self {
+        BCAIBehaviourEvent::RequestResponse(event)
     }
 }
 
@@ -56,6 +66,11 @@ pub enum Command {
     },
     Bootstrap {
         response: oneshot::Sender<Result<(), P2PError>>,
+    },
+    Request {
+        peer_id: PeerId,
+        message: WireMessage,
+        response: oneshot::Sender<Result<WireMessage, P2PError>>,
     },
 }
 
@@ -76,6 +91,8 @@ pub enum P2PError {
     TransportError(String),
     #[error("Input/Output error: {0}")]
     IoError(String),
+    #[error("Network error: {0}")]
+    Network(String),
 }
 
 impl From<std::io::Error> for P2PError {
@@ -84,15 +101,72 @@ impl From<std::io::Error> for P2PError {
     }
 }
 
+/// The wire protocol for request-response messages.
+#[derive(Debug, Clone)]
+pub struct WireCodec;
+
+#[derive(Clone)]
+pub struct WireProtocol();
+
+impl std::fmt::Debug for WireProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WireProtocol").finish()
+    }
+}
+
+impl AsRef<[u8]> for WireProtocol {
+    fn as_ref(&self) -> &[u8] {
+        b"/bcai/wire/1.0.0"
+    }
+}
+
+impl libp2p::request_response::Codec for WireCodec {
+    type Protocol = WireProtocol;
+    type Request = WireMessage;
+    type Response = WireMessage;
+
+    async fn read_request<T>(&mut self, _: &WireProtocol, io: &mut T) -> std::io::Result<Self::Request>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let mut vec = Vec::new();
+        io.read_to_end(&mut vec).await?;
+        Ok(serde_json::from_slice(&vec).unwrap())
+    }
+
+    async fn read_response<T>(&mut self, _: &WireProtocol, io: &mut T) -> std::io::Result<Self::Response>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let mut vec = Vec::new();
+        io.read_to_end(&mut vec).await?;
+        Ok(serde_json::from_slice(&vec).unwrap())
+    }
+
+    async fn write_request<T>(&mut self, _: &WireProtocol, io: &mut T, req: Self::Request) -> std::io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        let buf = serde_json::to_vec(&req).unwrap();
+        io.write_all(&buf).await
+    }
+
+    async fn write_response<T>(&mut self, _: &WireProtocol, io: &mut T, res: Self::Response) -> std::io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        let buf = serde_json::to_vec(&res).unwrap();
+        io.write_all(&buf).await
+    }
+}
+
 /// P2P message wrapper for network transport
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct P2PMessage {
-    pub from_peer: String,
-    pub to_peer: Option<String>, // None for broadcast
-    pub message_type: String,
-    pub payload: Vec<u8>,
-    pub timestamp: u64,
-    pub signature: Option<String>,
+pub enum WireMessage {
+    Block(crate::blockchain::block::Block),
+    Transaction(crate::blockchain::transaction::Transaction),
+    Ping,
+    Pong,
 }
 
 /// P2P peer information
@@ -144,11 +218,11 @@ pub struct P2PStats {
 pub struct P2PService {
     pub swarm: Swarm<BCAINetworkBehaviour>,
     pub command_receiver: mpsc::Receiver<Command>,
-    network_coordinator: NetworkCoordinator,
     peers: HashMap<String, PeerInfo>,
     stats: P2PStats,
     start_time: Option<Instant>,
     config: P2PConfig,
+    request_map: HashMap<request_response::RequestId, oneshot::Sender<Result<WireMessage, P2PError>>>,
 }
 
 const GLOBAL_TOPIC: &str = "bcai_global";
@@ -157,7 +231,6 @@ impl P2PService {
     /// Create a new P2P service
     pub async fn new(
         config: P2PConfig,
-        local_node: UnifiedNode,
     ) -> Result<(Self, P2PHandle), P2PError> {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
@@ -185,9 +258,15 @@ impl P2PService {
         )
         .map_err(|e| P2PError::SerializationFailed(e.to_string()))?;
 
+        let request_response_behaviour = request_response::Behaviour::new(
+            [(WireProtocol(), ProtocolSupport::Full)],
+            request_response::Config::default(),
+        );
+
         let behaviour = BCAINetworkBehaviour {
             gossipsub: gossipsub_behaviour,
             kademlia: kad::Behaviour::new(local_peer_id, store),
+            request_response: request_response_behaviour,
         };
 
         let mut swarm = libp2p::Swarm::new(transport, behaviour, local_peer_id, libp2p::swarm::Config::with_tokio_executor());
@@ -227,15 +306,14 @@ impl P2PService {
 
         let (command_sender, command_receiver) = mpsc::channel(100);
 
-        let network_coordinator = NetworkCoordinator::new(local_node);
         let service = Self {
             swarm,
             command_receiver,
-            network_coordinator,
             peers: HashMap::new(),
             stats: P2PStats::default(),
             start_time: None,
             config,
+            request_map: HashMap::new(),
         };
 
         let handle = P2PHandle::new(command_sender);
@@ -267,47 +345,43 @@ impl P2PService {
     async fn handle_swarm_event(&mut self, event: SwarmEvent<BCAIBehaviourEvent, kad::ToSwarm<kad::QueryId, <kad::store::MemoryStore as kad::store::RecordStore>::OutRecord>>) {
         match event {
             SwarmEvent::Behaviour(BCAIBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                propagation_source: peer_id,
-                message_id: id,
+                propagation_source: _peer_id,
+                message_id: _id,
                 message,
             })) => {
-                println!(
-                    "Gossipsub message from {}: {}",
-                    peer_id,
-                    String::from_utf8_lossy(&message.data)
-                );
-                // TODO: Deserialize and process message via NetworkCoordinator
+                if let Ok(wire_message) = serde_json::from_slice::<WireMessage>(&message.data) {
+                    println!("Received gossipsub message: {:?}", wire_message);
+                    // TODO: Pass this up to the application layer
+                }
             }
-            SwarmEvent::Behaviour(BCAIBehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed {
-                result: kad::QueryResult::Bootstrap(Ok(result)),
-                ..
+            SwarmEvent::Behaviour(BCAIBehaviourEvent::Kademlia(event)) => {
+                println!("Kademlia event: {:?}", event);
+            }
+            SwarmEvent::Behaviour(BCAIBehaviourEvent::RequestResponse(request_response::Event::Message {
+                peer,
+                message: request_response::Message::Request { request, channel, .. },
             })) => {
-                println!("Kademlia bootstrap progress: {} peers found", result.num_remaining);
+                // For now, just pong back
+                let response = WireMessage::Pong;
+                self.swarm.behaviour_mut().request_response.send_response(channel, response).unwrap();
+
+            }
+            SwarmEvent::Behaviour(BCAIBehaviourEvent::RequestResponse(request_response::Event::Message {
+                peer,
+                message: request_response::Message::Response { request_id, response },
+            })) => {
+                if let Some(sender) = self.request_map.remove(&request_id) {
+                    let _ = sender.send(Ok(response));
+                }
             }
             SwarmEvent::NewListenAddr { address, .. } => {
-                println!("👂 Listening on {}", address);
+                println!("Listening on {}", address);
             }
-            SwarmEvent::ConnectionEstablished {
-                peer_id,
-                endpoint: _,
-                ..
-            } => {
-                println!("🤝 Connected to {}", peer_id);
-                self.swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .add_explicit_peer(&peer_id);
+            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                println!("Connected to {}", peer_id);
             }
-            SwarmEvent::ConnectionClosed {
-                peer_id,
-                cause: _,
-                ..
-            } => {
-                println!("👋 Connection lost with {}", peer_id);
-                self.swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .remove_explicit_peer(&peer_id);
+            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                println!("Disconnected from {}", peer_id);
             }
             _ => {}
         }
@@ -327,26 +401,18 @@ impl P2PService {
                 }
             }
             Command::GetPeers { response } => {
-                let peers = self.swarm.behaviour().kademlia.kbuckets().count();
-                // This is not quite right, we need to get the actual peer IDs
-                let peer_ids = self
-                    .swarm
-                    .behaviour()
-                    .gossipsub
-                    .all_peers()
-                    .map(|(p, _)| p.clone())
-                    .collect();
-                let _ = response.send(peer_ids);
+                let peers = self.swarm.behaviour().kademlia.kbuckets().map(|kbucket| kbucket.iter().map(|entry| *entry.node.key.preimage()).collect()).concat();
+                let _ = response.send(peers);
             }
             Command::Bootstrap { response } => {
                 match self.swarm.behaviour_mut().kademlia.bootstrap() {
-                    Ok(_) => {
-                        let _ = response.send(Ok(()));
-                    }
-                    Err(e) => {
-                        let _ = response.send(Err(P2PError::TransportError(format!("{:?}", e))));
-                    }
+                    Ok(_) => { let _ = response.send(Ok(())); }
+                    Err(e) => { let _ = response.send(Err(P2PError::Network(format!("Bootstrap failed: {:?}", e)))); }
                 }
+            }
+            Command::Request { peer_id, message, response } => {
+                let request_id = self.swarm.behaviour_mut().request_response.send_request(&peer_id, message);
+                self.request_map.insert(request_id, response);
             }
         }
     }
@@ -371,49 +437,28 @@ impl P2PService {
         sender_id: String,
         message: NetworkMessage,
     ) -> Result<(), P2PError> {
-        self.stats.messages_received += 1;
-
-        // Update peer last seen
-        // OLD LOGIC - to be replaced by swarm events
-
+        // This logic should be moved to the application layer (e.g., a new NetworkCoordinator)
+        println!("Received message from {}: {:?}", sender_id, message);
         Ok(())
     }
 
     /// Send message to specific peer
     pub fn send_to_peer(&mut self, peer_id: &str, message: NetworkMessage) -> Result<(), P2PError> {
-        // OLD LOGIC - to be replaced by swarm commands
-        println!("📤 Sending message to peer {}: {:?}", peer_id, message);
-
-        self.stats.messages_sent += 1;
+        // This logic should be moved to the application layer
+        println!("Sending message to {}: {:?}", peer_id, message);
         Ok(())
     }
 
     /// Broadcast message to all peers
     pub fn broadcast_message(&mut self, message: NetworkMessage) -> Result<(), P2PError> {
-        // OLD LOGIC - to be replaced by swarm commands
-        println!("📢 Broadcasting message: {:?}", message);
-
+        // This logic should be moved to the application layer
+        println!("Broadcasting message: {:?}", message);
         Ok(())
     }
 
     /// Perform periodic maintenance
     pub fn perform_maintenance(&mut self) {
-        let now = Instant::now();
-        let timeout = Duration::from_secs(300); // 5 minutes
-
-        // Remove stale peers
-        self.peers.retain(|peer_id, peer| {
-            if now.duration_since(peer.last_seen) > timeout {
-                println!("🗑️ Removing stale peer: {}", peer_id);
-                false
-            } else {
-                true
-            }
-        });
-
-        self.update_stats();
-
-        println!("💓 P2P heartbeat - Connected peers: {}", self.peers.len());
+        // Placeholder
     }
 
     /// Update service statistics
@@ -476,6 +521,15 @@ impl P2PHandle {
         let (tx, rx) = oneshot::channel();
         self.command_sender
             .send(Command::Bootstrap { response: tx })
+            .await
+            .map_err(|e| P2PError::ChannelError(e.to_string()))?;
+        rx.await.map_err(|e| P2PError::ChannelError(e.to_string()))?
+    }
+
+    pub async fn request(&self, peer_id: PeerId, message: WireMessage) -> Result<WireMessage, P2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_sender
+            .send(Command::Request { peer_id, message, response: tx })
             .await
             .map_err(|e| P2PError::ChannelError(e.to_string()))?;
         rx.await.map_err(|e| P2PError::ChannelError(e.to_string()))?

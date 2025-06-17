@@ -3,17 +3,21 @@
 use crate::blockchain::{
     block::Block, chain::Blockchain, transaction::Transaction, validation, BlockchainError,
 };
+use crate::job::Job;
 use crate::pouw::PoUWTask;
-use std::sync::{Arc, Mutex};
+use std::collections::{HashSet, VecDeque};
+use tokio::sync::Mutex;
+use std::sync::Arc;
 
 /// Creates a new block, solving the PoUW challenge.
-pub fn mine_block(
+pub async fn mine_block(
     miner_pubkey: String,
     blockchain: Arc<Mutex<Blockchain>>,
-    mempool: Arc<Mutex<Vec<Transaction>>>,
+    mempool: Arc<Mutex<HashSet<Transaction>>>,
+    job_queue: Arc<Mutex<VecDeque<Job>>>,
 ) -> Result<Block, BlockchainError> {
-    let mut chain = blockchain.lock().unwrap();
-    let mempool_guard = mempool.lock().unwrap();
+    let mut chain = blockchain.lock().await;
+    let mempool_guard = mempool.lock().await;
 
     let prev_block = chain
         .get_last_block()
@@ -38,8 +42,16 @@ pub fn mine_block(
     let tx_root = Block::calculate_merkle_root(&transactions_to_include);
     let new_block_index = (prev_block.index + 1) as u32;
 
+    // Get a job from the queue for the PoUW task.
+    let job = job_queue.lock().await.pop_front();
+
     // TODO: The PoUW task should come from a job queue.
-    let pouw_task = PoUWTask::new("model_1".to_string(), "dataset_1".to_string(), 10);
+    let pouw_task = if let Some(job) = job {
+        PoUWTask::new(job.model_id, job.dataset_id, job.iterations)
+    } else {
+        // Fallback to a dummy task if the job queue is empty
+        PoUWTask::new("default_model".to_string(), "default_dataset".to_string(), 1)
+    };
     let pouw_solution = pouw_task.solve();
 
     let new_block = Block::new(
