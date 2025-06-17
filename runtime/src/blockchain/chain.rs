@@ -66,28 +66,31 @@ impl Blockchain {
 
     /// Adds a new block to the chain, validating it and applying all its transactions to the state.
     pub fn add_block(&mut self, block: Block) -> Result<(), BlockchainError> {
-        let tip = self.blocks.last().expect("Blockchain must have a genesis block");
+        let prev_block = self.blocks.last().expect("Blockchain must have a genesis block");
+        validation::validate_block(&block, prev_block, &self.state)?;
 
-        validation::validate_block_structure(&block, tip)?;
-        validation::validate_pow_solution(&block.task, &block.solution)?;
-
-        let mut temp_balances = self.state.balances.clone();
-        let mut temp_nonces = self.account_nonces.clone();
-
+        // Apply transactions and calculate total fees
+        let mut total_fees = 0;
         for tx in &block.transactions {
-            validation::validate_transaction_with_state(tx, &temp_balances, &temp_nonces)?;
-            validation::apply_transaction_to_state(tx, &mut temp_balances, &mut temp_nonces)?;
+            self.state.apply_transaction(tx)?;
+            total_fees += tx.fee;
         }
 
-        // Reward the miner.
-        let total_fees: u64 = block.transactions.iter().map(|tx| tx.fee).sum();
-        let miner_reward = BLOCK_REWARD.saturating_add(total_fees);
-        let miner_balance = temp_balances.entry(block.miner.clone()).or_insert(0);
-        *miner_balance = miner_balance.saturating_add(miner_reward);
+        // Reward the miner
+        let miner_reward = BLOCK_REWARD
+            .checked_add(total_fees)
+            .ok_or(BlockchainError::TransactionValidationError(
+                "Miner reward overflow".to_string(),
+            ))?;
 
-        // Commit the new state.
-        self.state.balances = temp_balances;
-        self.account_nonces = temp_nonces;
+        let miner_balance = self.state.balances.entry(block.miner.clone()).or_insert(0);
+        *miner_balance = miner_balance
+            .checked_add(miner_reward)
+            .ok_or(BlockchainError::TransactionValidationError(
+                "Miner balance overflow".to_string(),
+            ))?;
+
+        // Add the block to the chain
         self.blocks.push(block);
 
         Ok(())

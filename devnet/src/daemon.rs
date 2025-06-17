@@ -16,12 +16,92 @@ use tokio::{
     net::{UnixListener, UnixStream},
 };
 use std::{
+    collections::HashSet,
+    error::Error,
     fs,
     process,
 };
+use tokio::sync::Mutex;
+use tracing::{error, info};
 
 pub const SOCKET_PATH: &str = "/tmp/bcai_devnet.sock";
 pub const PID_FILE: &str = "/tmp/bcai_devnet.pid";
+
+type Mempool = Arc<Mutex<Vec<Transaction>>>;
+
+pub struct Daemon {
+    pid: String,
+    p2p_service: Arc<Mutex<NetworkCoordinator>>,
+    blockchain: Arc<Mutex<Blockchain>>,
+    mempool: Mempool,
+}
+
+impl Daemon {
+    fn new() -> Self {
+        let blockchain = Arc::new(Mutex::new(Blockchain::new(Default::default())));
+        let mempool = Arc::new(Mutex::new(HashSet::new()));
+
+        Self {
+            pid: process::id().to_string(),
+            p2p_service: Arc::new(Mutex::new(NetworkCoordinator::new(blockchain.clone(), mempool.clone()).await)),
+            blockchain,
+            mempool,
+        }
+    }
+
+    fn handle_command(&mut self, stream: &mut UnixStream) -> Result<String, Box<dyn Error>> {
+        let mut cmd_bytes = Vec::new();
+        if let Err(e) = stream.read_to_end(&mut cmd_bytes).await {
+            error!("Failed to read command from socket: {}", e);
+            return Ok("Failed to read command".to_string());
+        }
+
+        let cmd: P2pCommands = match bincode::deserialize(&cmd_bytes) {
+            Ok(cmd) => cmd,
+            Err(e) => {
+                let response = format!("Failed to deserialize command: {}", e);
+                if let Err(write_err) = stream.write_all(response.as_bytes()).await {
+                    error!("Failed to write error response to socket: {}", write_err);
+                }
+                return Ok(response);
+            }
+        };
+
+        let response = self.handle_daemon_command(cmd, self.blockchain.clone(), self.mempool.clone(), self.p2p_service.clone())?;
+        
+        if let Err(e) = stream.write_all(response.as_bytes()).await {
+            error!("Failed to write response to socket: {}", e);
+        }
+        Ok(response)
+    }
+
+    fn validate_and_add_to_mempool(&self, tx: Transaction) -> Result<(), Box<dyn Error>> {
+        let chain = self.blockchain.lock().unwrap();
+
+        // 1. Verify signature
+        if !tx.verify_signature() {
+            return Err("Invalid signature".into());
+        }
+
+        // 2. Check nonce
+        let expected_nonce = chain.state.get_nonce(&tx.from) + 1;
+        if tx.nonce != expected_nonce {
+            return Err(format!("Invalid nonce. Expected {}, got {}", expected_nonce, tx.nonce).into());
+        }
+
+        // 3. Check balance
+        let balance = chain.state.get_balance(&tx.from);
+        let total_cost = tx.amount + tx.fee;
+        if balance < total_cost {
+            return Err(format!("Insufficient funds. Have {}, need {}", balance, total_cost).into());
+        }
+
+        // Add to mempool
+        self.mempool.lock().unwrap().insert(tx);
+
+        Ok(())
+    }
+}
 
 /// The main entry point for the daemon process.
 pub async fn daemon_main() {
@@ -31,9 +111,7 @@ pub async fn daemon_main() {
         return;
     }
     
-    // Initialize the blockchain and mempool
-    let blockchain = Arc::new(Mutex::new(Blockchain::new(Default::default())));
-    let mempool = Arc::new(Mutex::new(Vec::<Transaction>::new()));
+    let mut daemon = Daemon::new();
 
     // Set up the Unix socket for CLI communication
     let listener = match UnixListener::bind(SOCKET_PATH) {
@@ -47,41 +125,17 @@ pub async fn daemon_main() {
     info!("Daemon listening on socket: {}", SOCKET_PATH);
 
     // Start the network coordinator
-    let coordinator =
-        Arc::new(Mutex::new(NetworkCoordinator::new(blockchain.clone(), mempool.clone()).await));
-
-    // Run the coordinator's event loop in a separate task
-    let coordinator_clone = coordinator.clone();
+    let coordinator_clone = daemon.p2p_service.lock().await.clone();
     tokio::spawn(async move {
-        coordinator_clone.lock().await.run().await;
+        coordinator_clone.run().await;
     });
 
     // Main command loop: listen for commands from the CLI via the socket
     loop {
         if let Ok((mut stream, _)) = listener.accept().await {
-            let mut cmd_bytes = Vec::new();
-            if let Err(e) = stream.read_to_end(&mut cmd_bytes).await {
-                error!("Failed to read command from socket: {}", e);
-                continue;
-            }
-
-            let cmd: P2pCommands = match bincode::deserialize(&cmd_bytes) {
-                Ok(cmd) => cmd,
-                Err(e) => {
-                    let response = format!("Failed to deserialize command: {}", e);
-                    if let Err(write_err) = stream.write_all(response.as_bytes()).await {
-                        error!("Failed to write error response to socket: {}", write_err);
-                    }
-                    continue;
-                }
-            };
-
-            let response =
-                handle_daemon_command(cmd, blockchain.clone(), mempool.clone(), coordinator.clone())
-                    .await;
-            
+            let response = daemon.handle_command(&mut stream).await?;
             if let Err(e) = stream.write_all(response.as_bytes()).await {
-                 error!("Failed to write response to socket: {}", e);
+                error!("Failed to write response to socket: {}", e);
             }
         }
     }
@@ -91,19 +145,19 @@ pub async fn daemon_main() {
 async fn handle_daemon_command(
     command: P2pCommands,
     blockchain: Arc<Mutex<Blockchain>>,
-    mempool: Arc<Mutex<Vec<Transaction>>>,
+    mempool: Mempool,
     coordinator: Arc<Mutex<NetworkCoordinator>>,
-) -> String {
+) -> Result<String, Box<dyn Error>> {
     match command {
-        P2pCommands::Peers => "Peers command not yet implemented.".to_string(),
-        P2pCommands::Send { .. } => "Send command not yet implemented.".to_string(),
+        P2pCommands::Peers => Ok("Peers command not yet implemented.".to_string()),
+        P2pCommands::Send { .. } => Ok("Send command not yet implemented.".to_string()),
         P2pCommands::Mine => {
             info!("Received 'mine' command.");
             let miner_pubkey = DEV_GENESIS_PUBKEY.to_string();
 
-            let new_block = match miner::mine_block(miner_pubkey, blockchain.clone(), mempool) {
+            let new_block = match miner::mine_block(miner_pubkey, blockchain.clone(), mempool.clone()) {
                 Ok(block) => block,
-                Err(e) => return format!("Error creating block: {}", e),
+                Err(e) => return Ok(format!("Error creating block: {}", e)),
             };
 
             let block_hash = new_block.hash.clone();
@@ -115,57 +169,109 @@ async fn handle_daemon_command(
                 if let Err(e) = bc.add_block(new_block.clone()) {
                     let err_msg = format!("Failed to add locally mined block: {}", e);
                     error!("{}", err_msg);
-                    return err_msg;
+                    return Ok(err_msg);
                 }
             }
 
             // Broadcast the new block to the network.
             let mut coord = coordinator.lock().await;
-            coord.broadcast(WireMessage::Block(new_block)).await;
+            coord.broadcast(WireMessage::Block(new_block)).await?;
 
-            format!("Mined and broadcast new block: {}", block_hash)
+            Ok(format!("Mined and broadcast new block: {}", block_hash))
         }
         P2pCommands::Tx { tx_command } => match tx_command {
             TxCommands::Create {
                 from_secret_key_file,
                 to_pubkey,
                 amount,
-                nonce,
                 fee,
+                nonce,
             } => {
                 let secret_key_bytes = match std::fs::read(from_secret_key_file) {
                     Ok(bytes) => bytes,
-                    Err(e) => return format!("Failed to read secret key file: {}", e),
+                    Err(e) => return Ok(format!("Failed to read secret key file: {}", e)),
                 };
                 let secret_key = match SecretKey::from_bytes(&secret_key_bytes) {
-                     Ok(sk) => sk,
-                     Err(_) => return "Invalid secret key file format".to_string(),
+                    Ok(sk) => sk,
+                    Err(_) => return Ok("Invalid secret key file format".to_string()),
                 };
                 let to_pk_bytes = match hex::decode(&to_pubkey) {
                     Ok(bytes) => bytes,
-                    Err(_) => return "Invalid recipient public key hex".to_string(),
+                    Err(_) => return Ok("Invalid recipient public key hex".to_string()),
                 };
                 let to_public_key = match PublicKey::from_bytes(&to_pk_bytes) {
                     Ok(pk) => pk,
-                    Err(_) => return "Invalid recipient public key".to_string(),
+                    Err(_) => return Ok("Invalid recipient public key".to_string()),
                 };
 
                 let tx = Transaction::new_transfer(&secret_key, to_public_key, amount, fee, nonce);
+                
+                if let Err(e) = validate_transaction_for_mempool(&tx, &blockchain, &mempool) {
+                    return Ok(format!("Transaction is invalid: {}", e));
+                }
+
                 let tx_hash = tx.hash();
                 
-                // Add to our own mempool and broadcast to the network
                 mempool.lock().unwrap().push(tx.clone());
-                coordinator.lock().await.broadcast(WireMessage::Transaction(tx)).await;
+                
+                let coord = coordinator.lock().await;
+                coord.broadcast(WireMessage::Transaction(tx)).await?;
 
-                format!("Submitted transaction {} to network.", tx_hash)
+                Ok(format!("Submitted transaction {} to network.", tx_hash))
             }
         },
         P2pCommands::Account { account_command } => match account_command {
             AccountCommands::Nonce { pubkey } => {
                 let bc = blockchain.lock().unwrap();
                 let nonce = bc.get_nonce(&pubkey);
-                format!("Nonce for {}: {}", pubkey, nonce)
+                Ok(format!("Nonce for {}: {}", pubkey, nonce))
             }
         },
+        _ => Ok("Command not yet implemented or invalid.".to_string()),
     }
+}
+
+/// Validates a transaction against the current chain state and mempool.
+/// Returns an error message string if invalid.
+fn validate_transaction_for_mempool(
+    tx: &Transaction,
+    blockchain: &Arc<Mutex<Blockchain>>,
+    mempool: &Mempool,
+) -> Result<(), String> {
+    let chain = blockchain.lock().unwrap();
+
+    if !tx.verify_signature() {
+        return Err("Invalid signature".to_string());
+    }
+
+    let expected_nonce = chain.state.get_nonce(&tx.from);
+    if tx.nonce != expected_nonce {
+        return Err(format!(
+            "Invalid nonce. Expected {}, got {}",
+            expected_nonce, tx.nonce
+        ));
+    }
+
+    let balance = chain.state.get_balance(&tx.from);
+    let total_cost = tx.amount.checked_add(tx.fee).ok_or("Total cost overflows u64")?;
+
+    if balance < total_cost {
+        return Err(format!(
+            "Insufficient funds. Have {}, need {}",
+            balance, total_cost
+        ));
+    }
+
+    let mempool_guard = mempool.lock().unwrap();
+    if mempool_guard.iter().any(|mempool_tx| mempool_tx.from == tx.from && mempool_tx.nonce == tx.nonce) {
+        return Err("Transaction with same nonce already in mempool".to_string());
+    }
+
+    Ok(())
+}
+
+fn read_secret_key(path: &str) -> Result<SecretKey, Box<dyn Error>> {
+    let key_bytes = fs::read(path)?;
+    SecretKey::from_bytes(&key_bytes)
+        .map_err(|e| format!("Failed to create secret key from bytes: {}", e).into())
 } 

@@ -19,6 +19,23 @@ mod daemon;
 use cli::{Cli, Commands};
 use daemon::{daemon_main, PID_FILE, SOCKET_PATH};
 
+#[derive(Debug, Subcommand)]
+pub enum TxCommands {
+    /// Creates and broadcasts a new transaction.
+    Create {
+        #[clap(long)]
+        from_secret_key_file: String,
+        #[clap(long)]
+        to_pubkey: String,
+        #[clap(long)]
+        amount: u64,
+        #[clap(long, default_value_t = 10)]
+        fee: u64,
+        #[clap(long)]
+        nonce: u64,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();

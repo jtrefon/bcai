@@ -3,31 +3,38 @@ use schnorrkel::{signing_context, PublicKey, SecretKey, Signature};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Transaction {
-    /// The public key of the transaction sender (hex-encoded).
-    pub signer: String,
-    /// The public key of the transaction recipient (hex-encoded).
-    pub recipient: String,
+    pub from: String,
+    pub to: String,
     pub amount: u64,
     pub fee: u64,
     pub nonce: u64,
-    pub signature: Signature,
-}
-
-// Manual implementation of PartialEq to handle the Signature struct not deriving PartialEq.
-impl PartialEq for Transaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.signer == other.signer
-            && self.recipient == other.recipient
-            && self.amount == other.amount
-            && self.fee == other.fee
-            && self.nonce == other.nonce
-            && self.signature.to_bytes() == other.signature.to_bytes()
-    }
+    pub signature: Option<String>,
 }
 
 impl Transaction {
+    pub fn new(from: String, to: String, amount: u64, fee: u64, nonce: u64) -> Self {
+        Self {
+            from,
+            to,
+            amount,
+            fee,
+            nonce,
+            signature: None,
+        }
+    }
+
+    /// Creates a hash of the transaction for signing.
+    pub fn to_hash_bytes(&self) -> Vec<u8> {
+        let mut transaction_data = self.from.as_bytes().to_vec();
+        transaction_data.extend_from_slice(self.to.as_bytes());
+        transaction_data.extend_from_slice(&self.amount.to_le_bytes());
+        transaction_data.extend_from_slice(&self.fee.to_le_bytes());
+        transaction_data.extend_from_slice(&self.nonce.to_le_bytes());
+        transaction_data
+    }
+
     /// Creates and signs a new transfer transaction.
     pub fn new_transfer(
         from_secret_key: &SecretKey,
@@ -38,37 +45,25 @@ impl Transaction {
     ) -> Self {
         let signer_pubkey = from_secret_key.public_key();
         let mut tx_for_signing = Transaction {
-            signer: hex::encode(signer_pubkey.to_bytes()),
-            recipient: hex::encode(to_public_key.to_bytes()),
+            from: hex::encode(signer_pubkey.to_bytes()),
+            to: hex::encode(to_public_key.to_bytes()),
             amount,
             fee,
             nonce,
             // A placeholder signature is created and then immediately replaced.
-            signature: from_secret_key.sign(signing_context(SIGNING_CONTEXT).bytes(b"placeholder")),
+            signature: Some(hex::encode(from_secret_key.sign(signing_context(SIGNING_CONTEXT).bytes(b"placeholder")).to_bytes())),
         };
 
-        let message = tx_for_signing.to_signable_bytes();
+        let message = tx_for_signing.to_hash_bytes();
         let signature = from_secret_key.sign(signing_context(SIGNING_CONTEXT).bytes(&message));
-        tx_for_signing.signature = signature;
+        tx_for_signing.signature = Some(hex::encode(signature.to_bytes()));
 
         tx_for_signing
     }
 
-    /// Serializes the transaction into a canonical byte representation for signing.
-    pub fn to_signable_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(b"transfer");
-        bytes.extend_from_slice(self.signer.as_bytes());
-        bytes.extend_from_slice(self.recipient.as_bytes());
-        bytes.extend_from_slice(&self.amount.to_le_bytes());
-        bytes.extend_from_slice(&self.fee.to_le_bytes());
-        bytes.extend_from_slice(&self.nonce.to_le_bytes());
-        bytes
-    }
-
     /// Verifies the transaction's signature.
     pub fn verify_signature(&self) -> bool {
-        let signer_bytes = match hex::decode(&self.signer) {
+        let signer_bytes = match hex::decode(&self.from) {
             Ok(b) => b,
             Err(_) => return false,
         };
@@ -77,11 +72,20 @@ impl Transaction {
             Err(_) => return false,
         };
 
-        let message = self.to_signable_bytes();
+        let message = self.to_hash_bytes();
+        let signature_bytes = match hex::decode(&self.signature.clone().unwrap_or_default()) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+        let signature = match Signature::from_bytes(&signature_bytes) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+
         signer_pubkey
             .verify(
                 signing_context(SIGNING_CONTEXT).bytes(&message),
-                &self.signature,
+                &signature,
             )
             .is_ok()
     }
@@ -89,8 +93,8 @@ impl Transaction {
     /// Computes a unique and deterministic hash for the transaction.
     pub fn hash(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(self.to_signable_bytes());
-        hasher.update(self.signature.to_bytes());
+        hasher.update(self.to_hash_bytes());
+        hasher.update(self.signature.clone().unwrap_or_default().as_bytes());
         hex::encode(hasher.finalize())
     }
 
