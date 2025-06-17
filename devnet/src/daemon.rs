@@ -149,8 +149,18 @@ async fn handle_daemon_command(
     coordinator: Arc<Mutex<NetworkCoordinator>>,
 ) -> Result<String, Box<dyn Error>> {
     match command {
-        P2pCommands::Peers => Ok("Peers command not yet implemented.".to_string()),
-        P2pCommands::Send { .. } => Ok("Send command not yet implemented.".to_string()),
+        P2pCommands::Info => {
+            let bc = blockchain.lock().unwrap();
+            if let Some(last_block) = bc.get_last_block() {
+                Ok(format!(
+                    "Chain Info:\n  Length: {}\n  Last Block Hash: {}",
+                    bc.blocks.len(),
+                    last_block.hash
+                ))
+            } else {
+                Ok("Chain Info:\n  The blockchain is empty.".to_string())
+            }
+        }
         P2pCommands::Mine => {
             info!("Received 'mine' command.");
             let miner_pubkey = DEV_GENESIS_PUBKEY.to_string();
@@ -159,25 +169,39 @@ async fn handle_daemon_command(
                 Ok(block) => block,
                 Err(e) => return Ok(format!("Error creating block: {}", e)),
             };
-
             let block_hash = new_block.hash.clone();
-            info!("Successfully mined new block: {}", block_hash);
+            let num_txs = new_block.transactions.len();
+            let total_fees: u64 = new_block.transactions.iter().map(|tx| tx.fee).sum();
+            let miner_reward = BLOCK_REWARD.saturating_add(total_fees);
 
-            // Add the new block to our local chain before broadcasting.
-            {
-                let mut bc = blockchain.lock().unwrap();
-                if let Err(e) = bc.add_block(new_block.clone()) {
+            let included_txs = new_block.transactions.clone();
+
+            match blockchain.lock().unwrap().add_block(new_block) {
+                Ok(_) => {
+                    info!("Successfully added locally mined block: {}", block_hash);
+                    prune_mempool(&mempool, &blockchain, &included_txs);
+                }
+                Err(e) => {
                     let err_msg = format!("Failed to add locally mined block: {}", e);
                     error!("{}", err_msg);
                     return Ok(err_msg);
                 }
             }
-
-            // Broadcast the new block to the network.
+            
+            // We must refetch the block to broadcast it, as it was moved into add_block
+            let latest_block = blockchain.lock().unwrap().get_last_block().unwrap().clone();
             let mut coord = coordinator.lock().await;
-            coord.broadcast(WireMessage::Block(new_block)).await?;
+            coord.broadcast(WireMessage::Block(latest_block)).await?;
 
-            Ok(format!("Mined and broadcast new block: {}", block_hash))
+            Ok(format!(
+                "Success! Mined and broadcast new block #{}:\n  Hash: {}\n  Transactions: {}\n  Miner Reward: {} ({} base + {} fees)",
+                blockchain.lock().unwrap().blocks.len() - 1,
+                block_hash,
+                num_txs,
+                miner_reward,
+                BLOCK_REWARD,
+                total_fees
+            ))
         }
         P2pCommands::Tx { tx_command } => match tx_command {
             TxCommands::Create {
@@ -204,7 +228,7 @@ async fn handle_daemon_command(
                     Err(_) => return Ok("Invalid recipient public key".to_string()),
                 };
 
-                let tx = Transaction::new_transfer(&secret_key, to_public_key, amount, fee, nonce);
+                let tx = Transaction::new_transfer(&secret_key, to_public_key, amount, fee, nonce.unwrap());
                 
                 if let Err(e) = validate_transaction_for_mempool(&tx, &blockchain, &mempool) {
                     return Ok(format!("Transaction is invalid: {}", e));
@@ -223,12 +247,36 @@ async fn handle_daemon_command(
         P2pCommands::Account { account_command } => match account_command {
             AccountCommands::Nonce { pubkey } => {
                 let bc = blockchain.lock().unwrap();
-                let nonce = bc.get_nonce(&pubkey);
-                Ok(format!("Nonce for {}: {}", pubkey, nonce))
+                let nonce = bc.state.get_nonce(&pubkey);
+                Ok(format!("{}", nonce))
             }
         },
         _ => Ok("Command not yet implemented or invalid.".to_string()),
     }
+}
+
+/// Removes transactions included in a new block from the mempool
+/// and purges any other transactions that are now invalid.
+fn prune_mempool(
+    mempool: &Mempool,
+    blockchain: &Arc<Mutex<Blockchain>>,
+    included_txs: &[Transaction],
+) {
+    let mut mempool_guard = mempool.lock().unwrap();
+    let chain_guard = blockchain.lock().unwrap();
+
+    let included_hashes: HashSet<_> = included_txs.iter().map(|tx| tx.hash()).collect();
+    mempool_guard.retain(|tx| !included_hashes.contains(&tx.hash()));
+
+    mempool_guard.retain(|tx| {
+        validation::validate_transaction_stateful(tx, &chain_guard.state).is_ok()
+    });
+
+    info!(
+        "Mempool pruned. Included: {}. Remaining: {}.",
+        included_txs.len(),
+        mempool_guard.len()
+    );
 }
 
 /// Validates a transaction against the current chain state and mempool.
@@ -240,31 +288,13 @@ fn validate_transaction_for_mempool(
 ) -> Result<(), String> {
     let chain = blockchain.lock().unwrap();
 
-    if !tx.verify_signature() {
-        return Err("Invalid signature".to_string());
-    }
-
-    let expected_nonce = chain.state.get_nonce(&tx.from);
-    if tx.nonce != expected_nonce {
-        return Err(format!(
-            "Invalid nonce. Expected {}, got {}",
-            expected_nonce, tx.nonce
-        ));
-    }
-
-    let balance = chain.state.get_balance(&tx.from);
-    let total_cost = tx.amount.checked_add(tx.fee).ok_or("Total cost overflows u64")?;
-
-    if balance < total_cost {
-        return Err(format!(
-            "Insufficient funds. Have {}, need {}",
-            balance, total_cost
-        ));
-    }
+    validation::validate_transaction_stateless(tx)
+        .and_then(|_| validation::validate_transaction_stateful(tx, &chain.state))
+        .map_err(|e| e.to_string())?;
 
     let mempool_guard = mempool.lock().unwrap();
-    if mempool_guard.iter().any(|mempool_tx| mempool_tx.from == tx.from && mempool_tx.nonce == tx.nonce) {
-        return Err("Transaction with same nonce already in mempool".to_string());
+    if mempool_guard.iter().any(|mempool_tx| mempool_tx.hash() == tx.hash()) {
+        return Err("Transaction already in mempool".to_string());
     }
 
     Ok(())

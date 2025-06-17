@@ -3,6 +3,7 @@ use crate::blockchain::{
 };
 use crate::pouw::{PoUWTask, PoUWSolution};
 use std::collections::HashMap;
+use crate::state::State;
 
 /// Validates the structural integrity of a new block against the previous one.
 pub fn validate_block_structure(
@@ -83,6 +84,88 @@ pub fn apply_transaction_to_state(
 
     let sender_nonce = nonces.entry(tx.signer.clone()).or_insert(0);
     *sender_nonce += 1;
+
+    Ok(())
+}
+
+/// Validates a transaction's internal consistency (e.g., signature).
+/// This is a stateless validation.
+pub fn validate_transaction_stateless(tx: &Transaction) -> Result<(), BlockchainError> {
+    if !tx.verify_signature() {
+        return Err(BlockchainError::TransactionValidationError(
+            "Invalid signature".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validates a transaction against the current state (e.g., nonce, balance).
+/// This is a stateful validation.
+pub fn validate_transaction_stateful(
+    tx: &Transaction,
+    state: &State,
+) -> Result<(), BlockchainError> {
+    // Check nonce
+    let expected_nonce = state.get_nonce(&tx.from);
+    if tx.nonce != expected_nonce {
+        return Err(BlockchainError::TransactionValidationError(format!(
+            "Invalid nonce for {}. Expected {}, got {}",
+            tx.from, expected_nonce, tx.nonce
+        )));
+    }
+
+    // Check balance
+    let balance = state.get_balance(&tx.from);
+    let total_cost = tx
+        .amount
+        .checked_add(tx.fee)
+        .ok_or_else(|| BlockchainError::TransactionValidationError("Balance overflow".to_string()))?;
+
+    if balance < total_cost {
+        return Err(BlockchainError::TransactionValidationError(format!(
+            "Insufficient funds for {}. Have {}, need {}",
+            tx.from, balance, total_cost
+        )));
+    }
+
+    Ok(())
+}
+
+/// Validates a full block, including all its transactions.
+pub fn validate_block(
+    block: &Block,
+    prev_block: &Block,
+    state: &State,
+) -> Result<(), BlockchainError> {
+    // 1. Validate block header and structure
+    if block.index != prev_block.index + 1 {
+        return Err(BlockchainError::InvalidBlock(
+            "Incorrect block index".to_string(),
+        ));
+    }
+    if block.prev_hash != prev_block.hash {
+        return Err(BlockchainError::InvalidBlock(
+            "Previous block hash does not match".to_string(),
+        ));
+    }
+    if block.calculate_hash() != block.hash {
+        return Err(BlockchainError::InvalidBlock("Block hash is incorrect".to_string()));
+    }
+
+    // 2. Validate PoUW solution
+    if !block.task.verify(&block.solution) {
+        return Err(BlockchainError::InvalidBlock(
+            "Invalid PoUW solution".to_string(),
+        ));
+    }
+
+    // 3. Validate all transactions in the block against the given state
+    let mut temp_state = state.clone();
+    for tx in &block.transactions {
+        validate_transaction_stateless(tx)?;
+        validate_transaction_stateful(tx, &temp_state)?;
+        temp_state.apply_transaction(tx)?; // Apply to temp state for subsequent tx validation
+    }
 
     Ok(())
 } 
