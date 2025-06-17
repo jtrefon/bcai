@@ -3,6 +3,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
+use hex;
 
 /// A Proof-of-Useful-Work task
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -361,5 +362,63 @@ mod tests {
             adjusted_extreme >= current.saturating_sub(current / 4),
             "Difficulty adjustment should be clamped"
         );
+    }
+}
+
+/// A simple Proof-of-Work task.
+/// In a real PoUW system, this would be a machine learning task.
+/// For now, it's a standard cryptographic puzzle.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PoUWTask {
+    pub challenge: String,
+    /// Number of leading zeros required in the solution hash.
+    pub difficulty: u32,
+}
+
+/// The solution to a PoUWTask.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct PoUWSolution {
+    pub nonce: u64,
+    pub solution_hash: String,
+}
+
+impl PoUWTask {
+    /// Creates a new PoW task from the previous block's hash and the current transaction data.
+    pub fn new(prev_block_hash: &str, transactions_root: &str, difficulty: u32) -> Self {
+        // The challenge is a combination of the parent hash and the merkle root of transactions.
+        let challenge = format!("{}{}", prev_block_hash, transactions_root);
+        PoUWTask {
+            challenge,
+            difficulty,
+        }
+    }
+
+    /// Solves the PoW puzzle. This is computationally intensive and is the "work" in PoW.
+    /// In a real system, this would be done by competing miners.
+    pub fn solve(&self) -> PoUWSolution {
+        let mut nonce = 0;
+        loop {
+            let attempt = format!("{}{}", self.challenge, nonce);
+            let hash = Sha256::digest(attempt.as_bytes());
+            let hash_hex = hex::encode(hash);
+
+            if hash_hex.starts_with(&"0".repeat(self.difficulty as usize)) {
+                return PoUWSolution {
+                    nonce,
+                    solution_hash: hash_hex,
+                };
+            }
+            nonce += 1;
+        }
+    }
+
+    /// Verifies if a given solution is valid for this task.
+    pub fn verify(&self, solution: &PoUWSolution) -> bool {
+        let attempt = format!("{}{}", self.challenge, solution.nonce);
+        let hash = Sha256::digest(attempt.as_bytes());
+        let hash_hex = hex::encode(hash);
+
+        hash_hex == solution.solution_hash
+            && hash_hex.starts_with(&"0".repeat(self.difficulty as usize))
     }
 }

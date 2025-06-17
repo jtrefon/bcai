@@ -8,9 +8,19 @@ use crate::federated::{FederatedEngine, ModelParameters, FederatedStats};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
-use crate::blockchain::{Blockchain, BlockchainConfig, BlockchainError, Transaction};
+use crate::blockchain::{Blockchain, BlockchainConfig, BlockchainError, Transaction, Block};
 use crate::wire::WireMessage;
 use std::sync::{Arc, Mutex};
+use crate::pouw::PoUWTask;
+use futures::stream::StreamExt;
+use libp2p::gossipsub::IdentTopic as Topic;
+use libp2p::swarm::SwarmEvent;
+use libp2p::kad::Quorum;
+use libp2p::{kad, Swarm};
+use log::{error, info};
+use std::collections::HashSet;
+use tokio::sync::mpsc;
+use crate::p2p_service::{GOSSIP_TOPIC, P2PService};
 
 /// Network message types for distributed coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,95 +75,112 @@ pub enum NetworkMessage {
 /// Network-related errors
 #[derive(Debug, Error)]
 pub enum NetworkError {
-    #[error("Serialization error: {0}")]
-    Serialization(String),
-    #[error("Node not found: {0}")]
-    NodeNotFound(String),
-    #[error("Network partition detected")]
-    NetworkPartition,
-    #[error("Message validation failed")]
+    #[error("P2P communication error: {0}")]
+    P2pError(String),
+    #[error("Failed to serialize message: {0}")]
+    SerializationError(String),
+    #[error("Blockchain operation failed: {0}")]
+    BlockchainError(#[from] BlockchainError),
+    #[error("Invalid message received")]
     InvalidMessage,
-    #[error("Consensus failure: {0}")]
-    ConsensusFailed(String),
-    #[error("Blockchain error: {0}")]
-    Blockchain(#[from] BlockchainError),
 }
 
-/// Network coordinator managing distributed operations
+/// The NetworkCoordinator acts as the bridge between the P2P network and the
+/// blockchain's state. It listens for messages from the network and applies
+/// them to the blockchain, and it can also broadcast messages to the network.
 pub struct NetworkCoordinator {
-    local_node: UnifiedNode,
-    peer_capabilities: HashMap<String, NodeCapability>,
-    global_job_registry: HashMap<u64, DistributedJob>,
-    pending_evaluations: HashMap<u64, Vec<(String, bool)>>, // job_id -> (evaluator_id, is_valid)
-    network_block_height: u64,
+    pub p2p: P2PService,
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub mempool: Arc<Mutex<Vec<Transaction>>>,
+    pub rx: mpsc::Receiver<Vec<u8>>,
 }
 
 impl NetworkCoordinator {
     /// Create a new network coordinator
-    pub fn new(local_node: UnifiedNode) -> Self {
-        let blockchain = Arc::new(Mutex::new(Blockchain::new(BlockchainConfig::default())));
-        let mempool = Arc::new(Mutex::new(Vec::new()));
+    pub async fn new(
+        blockchain: Arc<Mutex<Blockchain>>,
+        mempool: Arc<Mutex<Vec<Transaction>>>,
+    ) -> Self {
+        let (tx, rx) = mpsc::channel(100);
+        let p2p = P2PService::new(tx).await;
         Self {
-            local_node,
-            peer_capabilities: HashMap::new(),
-            global_job_registry: HashMap::new(),
-            pending_evaluations: HashMap::new(),
-            network_block_height: 1,
+            p2p,
             blockchain,
             mempool,
+            rx,
         }
     }
 
-    /// Handle incoming messages from the P2P network.
-    pub fn handle_wire_message(
-        &mut self,
-        message: WireMessage,
-        _sender_id: &str,
-    ) -> Result<Option<WireMessage>, NetworkError> {
-        match message {
-            WireMessage::Block(block) => {
-                println!("Received new block (height: {}) from network", block.height);
-                let mut bc = self.blockchain.lock().unwrap();
-                bc.add_block(block)?;
-                // TODO: Propagate block to peers? Libp2p gossipsub handles this.
-            }
-            WireMessage::Transaction(tx) => {
-                println!("Received new transaction: {}", tx.hash());
-                
-                // --- SIGNATURE VERIFICATION ---
-                if !tx.verify_signature() {
-                    return Err(NetworkError::InvalidMessage);
-                }
-                
-                let mut mempool = self.mempool.lock().unwrap();
-                if !mempool.contains(&tx) {
-                    mempool.push(tx);
-                }
-            }
-            WireMessage::GetBlocks { from_height } => {
-                let bc = self.blockchain.lock().unwrap();
-                let tip = bc.get_tip().height;
-                let mut blocks_to_send = Vec::new();
-                for h in from_height..=tip {
-                    if let Some(block) = bc.get_block(h) {
-                        blocks_to_send.push(block.clone());
+    /// The main event loop for the network coordinator.
+    pub async fn run(&mut self) {
+        loop {
+            tokio::select! {
+                // Handle messages received from the P2P network
+                Some(message) = self.rx.recv() => {
+                    if let Ok(wire_message) = bincode::deserialize::<WireMessage>(&message) {
+                        if let Err(e) = self.handle_wire_message(wire_message) {
+                            error!("Error handling wire message: {}", e);
+                        }
+                    } else {
+                        error!("Failed to deserialize wire message");
                     }
+                },
+                // Handle direct swarm events
+                event = self.p2p.swarm.select_next_some() => {
+                    info!("P2P Swarm Event: {:?}", event);
                 }
-                if !blocks_to_send.is_empty() {
-                    return Ok(Some(WireMessage::Blocks(blocks_to_send)));
-                }
-            }
-            WireMessage::Ping => {
-                return Ok(Some(WireMessage::Pong));
-            }
-            _ => {
-                // Other message types are either responses or not yet handled
             }
         }
+    }
 
-        Ok(None)
+    /// Broadcasts a `WireMessage` to all peers on the gossip topic.
+    pub async fn broadcast(&mut self, message: WireMessage) {
+         if let Err(e) = self
+            .p2p
+            .gossipsub_publish(GOSSIP_TOPIC, message)
+            .await
+        {
+            error!("Error broadcasting message: {:?}", e);
+        }
+    }
+
+    /// Handles an incoming message from the P2P network.
+    fn handle_wire_message(&mut self, message: WireMessage) -> Result<(), NetworkError> {
+        match message {
+            WireMessage::Block(block) => {
+                info!("Received new block via gossip: {}", block.hash);
+                let included_tx_hashes: HashSet<String> =
+                    block.transactions.iter().map(|tx| tx.hash()).collect();
+
+                let mut bc = self.blockchain.lock().unwrap();
+                bc.add_block(block)?;
+
+                // Prune mempool
+                let mut mempool = self.mempool.lock().unwrap();
+                mempool.retain(|tx| !included_tx_hashes.contains(&tx.hash()));
+                info!(
+                    "Accepted new block. Mempool pruned. Size: {}",
+                    mempool.len()
+                );
+            }
+            WireMessage::Transaction(tx) => {
+                info!("Received new transaction via gossip: {}", tx.hash());
+
+                // Validate transaction before adding to mempool
+                let bc = self.blockchain.lock().unwrap();
+                bc.validate_transaction(&tx)?;
+
+                let mut mempool = self.mempool.lock().unwrap();
+                if !mempool.iter().any(|mempool_tx| mempool_tx == &tx) {
+                    mempool.push(tx);
+                    info!(
+                        "Added new transaction to mempool. Size: {}",
+                        mempool.len()
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Handle incoming network message
@@ -166,25 +193,25 @@ impl NetworkCoordinator {
 
         match message {
             NetworkMessage::CapabilityAnnouncement { node_id, capability } => {
-                self.peer_capabilities.insert(node_id, capability);
+                self.p2p.peer_capabilities.insert(node_id, capability);
             }
 
             NetworkMessage::JobPosted { job, poster_id: _ } => {
                 // Add to global registry
-                self.global_job_registry.insert(job.id, job.clone());
+                self.p2p.global_job_registry.insert(job.id, job.clone());
 
                 // Check if local node can handle this job
                 if self.can_handle_job(&job) {
                     responses.push(NetworkMessage::JobVolunteer {
                         job_id: job.id,
-                        node_id: self.local_node.node_id.clone(),
-                        capability: self.local_node.capability.clone(),
+                        node_id: self.p2p.local_node.node_id.clone(),
+                        capability: self.p2p.local_node.capability.clone(),
                     });
                 }
             }
 
             NetworkMessage::JobVolunteer { job_id, node_id, capability: _ } => {
-                if let Some(job) = self.global_job_registry.get_mut(&job_id) {
+                if let Some(job) = self.p2p.global_job_registry.get_mut(&job_id) {
                     if job.assigned_workers.len() < 3 && !job.assigned_workers.contains(&node_id) {
                         job.assigned_workers.push(node_id);
 
@@ -199,13 +226,13 @@ impl NetworkCoordinator {
             NetworkMessage::TrainingResultSubmission { result, submitter_id: _ } => {
                 // Store result for evaluation
                 if let Ok(is_valid) =
-                    self.local_node.evaluate_training_result(result.job_id, &result)
+                    self.p2p.local_node.evaluate_training_result(result.job_id, &result)
                 {
                     responses.push(NetworkMessage::TrainingEvaluation {
                         job_id: result.job_id,
                         result_hash: result.model_hash.clone(),
                         is_valid,
-                        evaluator_id: self.local_node.node_id.clone(),
+                        evaluator_id: self.p2p.local_node.node_id.clone(),
                     });
                 }
             }
@@ -217,7 +244,7 @@ impl NetworkCoordinator {
                 evaluator_id,
             } => {
                 // Collect evaluations
-                let evaluations = self.pending_evaluations.entry(job_id).or_default();
+                let evaluations = self.p2p.pending_evaluations.entry(job_id).or_default();
                 evaluations.push((evaluator_id, is_valid));
 
                 // Check if we have consensus (majority agreement)
@@ -227,28 +254,28 @@ impl NetworkCoordinator {
 
                     if valid_count * 2 > total_count {
                         // Majority agrees it's valid - complete the job
-                        if let Ok(()) = self.local_node.complete_distributed_job(job_id) {
-                            if self.global_job_registry.contains_key(&job_id) {
+                        if let Ok(()) = self.p2p.local_node.complete_distributed_job(job_id) {
+                            if self.p2p.global_job_registry.contains_key(&job_id) {
                                 responses.push(NetworkMessage::JobCompleted {
                                     job_id,
                                     final_model_hash: format!("final_model_{}", job_id),
                                 });
                             }
                         }
-                        self.pending_evaluations.remove(&job_id);
+                        self.p2p.pending_evaluations.remove(&job_id);
                     }
                 }
             }
 
             NetworkMessage::JobCompleted { job_id, final_model_hash: _ } => {
-                if let Some(job) = self.global_job_registry.get_mut(&job_id) {
+                if let Some(job) = self.p2p.global_job_registry.get_mut(&job_id) {
                     job.status = crate::node::JobStatus::Completed;
                 }
             }
 
             NetworkMessage::StateSync { requesting_node: _, last_known_block } => {
                 let jobs_to_sync: Vec<DistributedJob> = self
-                    .global_job_registry
+                    .p2p.global_job_registry
                     .values()
                     .filter(|job| job.created_block > last_known_block)
                     .cloned()
@@ -256,16 +283,16 @@ impl NetworkCoordinator {
 
                 responses.push(NetworkMessage::StateSyncResponse {
                     jobs: jobs_to_sync,
-                    current_block: self.network_block_height,
+                    current_block: self.p2p.network_block_height,
                 });
             }
 
             NetworkMessage::StateSyncResponse { jobs, current_block } => {
                 // Update network state
                 for job in jobs {
-                    self.global_job_registry.insert(job.id, job);
+                    self.p2p.global_job_registry.insert(job.id, job);
                 }
-                self.network_block_height = current_block;
+                self.p2p.network_block_height = current_block;
             }
 
             _ => {} // Handle other basic message types
@@ -276,10 +303,10 @@ impl NetworkCoordinator {
 
     /// Check if local node can handle a job
     fn can_handle_job(&self, job: &DistributedJob) -> bool {
-        self.local_node.capability.cpus >= job.required_capability.cpus
-            && self.local_node.capability.gpus >= job.required_capability.gpus
-            && self.local_node.capability.gpu_memory_gb >= job.required_capability.gpu_memory_gb
-            && self.local_node.staked() >= job.required_capability.available_stake
+        self.p2p.local_node.capability.cpus >= job.required_capability.cpus
+            && self.p2p.local_node.capability.gpus >= job.required_capability.gpus
+            && self.p2p.local_node.capability.gpu_memory_gb >= job.required_capability.gpu_memory_gb
+            && self.p2p.local_node.staked() >= job.required_capability.available_stake
     }
 
     /// Post a job to the network
@@ -292,7 +319,7 @@ impl NetworkCoordinator {
         model_spec: String,
         deadline_blocks: u64,
     ) -> Result<NetworkMessage, crate::node::NodeError> {
-        let job_id = self.local_node.post_distributed_job(
+        let job_id = self.p2p.local_node.post_distributed_job(
             description,
             reward,
             required_capability,
@@ -301,10 +328,10 @@ impl NetworkCoordinator {
             deadline_blocks,
         )?;
 
-        let job = self.local_node.distributed_jobs().get(&job_id).unwrap().clone();
-        self.global_job_registry.insert(job_id, job.clone());
+        let job = self.p2p.local_node.distributed_jobs().get(&job_id).unwrap().clone();
+        self.p2p.global_job_registry.insert(job_id, job.clone());
 
-        Ok(NetworkMessage::JobPosted { job, poster_id: self.local_node.node_id.clone() })
+        Ok(NetworkMessage::JobPosted { job, poster_id: self.p2p.local_node.node_id.clone() })
     }
 
     /// Execute training for a job and broadcast results
@@ -312,11 +339,11 @@ impl NetworkCoordinator {
         &mut self,
         job_id: u64,
     ) -> Result<NetworkMessage, crate::node::NodeError> {
-        let result = self.local_node.execute_training(job_id, 0x0000ffff)?;
+        let result = self.p2p.local_node.execute_training(job_id, 0x0000ffff)?;
 
         Ok(NetworkMessage::TrainingResultSubmission {
             result,
-            submitter_id: self.local_node.node_id.clone(),
+            submitter_id: self.p2p.local_node.node_id.clone(),
         })
     }
 
@@ -325,9 +352,9 @@ impl NetworkCoordinator {
         let bc = self.blockchain.lock().unwrap();
         let mempool = self.mempool.lock().unwrap();
         NetworkStats {
-            connected_peers: self.peer_capabilities.len(),
+            connected_peers: self.p2p.peer_capabilities.len(),
             active_jobs: self
-                .global_job_registry
+                .p2p.global_job_registry
                 .values()
                 .filter(|job| {
                     !matches!(
@@ -337,50 +364,50 @@ impl NetworkCoordinator {
                 })
                 .count(),
             completed_jobs: self
-                .global_job_registry
+                .p2p.global_job_registry
                 .values()
                 .filter(|job| job.status == crate::node::JobStatus::Completed)
                 .count(),
             network_block_height: bc.get_tip().height,
             pending_transactions: mempool.len(),
-            local_node_stats: self.local_node.get_stats(),
+            local_node_stats: self.p2p.local_node.get_stats(),
         }
     }
 
     /// Synchronize with network state
     pub fn request_state_sync(&self) -> NetworkMessage {
         NetworkMessage::StateSync {
-            requesting_node: self.local_node.node_id.clone(),
-            last_known_block: self.network_block_height,
+            requesting_node: self.p2p.local_node.node_id.clone(),
+            last_known_block: self.p2p.network_block_height,
         }
     }
 
     /// Announce capabilities to network
     pub fn announce_capabilities(&self) -> NetworkMessage {
         NetworkMessage::CapabilityAnnouncement {
-            node_id: self.local_node.node_id.clone(),
-            capability: self.local_node.capability.clone(),
+            node_id: self.p2p.local_node.node_id.clone(),
+            capability: self.p2p.local_node.capability.clone(),
         }
     }
 
     /// Get mutable reference to local node
     pub fn local_node_mut(&mut self) -> &mut UnifiedNode {
-        &mut self.local_node
+        &mut self.p2p.local_node
     }
 
     /// Get reference to local node
     pub fn local_node(&self) -> &UnifiedNode {
-        &self.local_node
+        &self.p2p.local_node
     }
 
     /// Get global job registry
     pub fn global_jobs(&self) -> &HashMap<u64, DistributedJob> {
-        &self.global_job_registry
+        &self.p2p.global_job_registry
     }
 
     /// Get mutable reference to global job registry (for testing)
     pub fn global_jobs_mut(&mut self) -> &mut HashMap<u64, DistributedJob> {
-        &mut self.global_job_registry
+        &mut self.p2p.global_job_registry
     }
 }
 
@@ -412,10 +439,10 @@ mod tests {
         };
 
         let node = UnifiedNode::new("test_node".to_string(), capability, 1000);
-        let coordinator = NetworkCoordinator::new(node);
+        let coordinator = NetworkCoordinator::new(Arc::new(Mutex::new(Blockchain::new(BlockchainConfig::default()))), Arc::new(Mutex::new(Vec::new()))).await;
 
-        assert_eq!(coordinator.peer_capabilities.len(), 0);
-        assert_eq!(coordinator.global_job_registry.len(), 0);
+        assert_eq!(coordinator.p2p.peer_capabilities.len(), 0);
+        assert_eq!(coordinator.p2p.global_job_registry.len(), 0);
     }
 
     #[test]
@@ -431,11 +458,11 @@ mod tests {
 
         // Create job poster
         let poster_node = UnifiedNode::new("poster".to_string(), capability.clone(), 1000);
-        let mut poster_coordinator = NetworkCoordinator::new(poster_node);
+        let mut poster_coordinator = NetworkCoordinator::new(Arc::new(Mutex::new(Blockchain::new(BlockchainConfig::default()))), Arc::new(Mutex::new(Vec::new()))).await;
 
         // Create worker
         let worker_node = UnifiedNode::new("worker".to_string(), capability.clone(), 1000);
-        let mut worker_coordinator = NetworkCoordinator::new(worker_node);
+        let mut worker_coordinator = NetworkCoordinator::new(Arc::new(Mutex::new(Blockchain::new(BlockchainConfig::default()))), Arc::new(Mutex::new(Vec::new()))).await;
         worker_coordinator.local_node_mut().stake_tokens(150)?;
 
         // Post job
