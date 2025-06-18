@@ -9,7 +9,7 @@ pub struct BCAI {
     pub ml_orchestrator: Option<ml::pipeline_orchestrator::Pipeline>,
     pub model_registry: Option<ml::model_registry::ModelMetadata>,
     pub inference_engine: Option<ml::inference_engine::ModelEndpoint>,
-    pub monitoring_system: Option<ml::ml_monitoring::MLMetrics>,
+    pub monitoring_system: Option<ml::monitoring::MLMetrics>,
 }
 
 impl BCAI {
