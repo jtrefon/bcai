@@ -21,13 +21,17 @@ pub mod manager;
 pub mod network;
 pub mod protocol;
 pub mod types;
+pub mod metadata;
+pub mod redundancy;
 
 // Re-export core types
 pub use chunk::{ChunkId, ChunkInfo, DataChunk};
 pub use config::{
     CacheConfig, CompressionConfig, EncryptionConfig, LargeDataConfig, RetryConfig,
 };
-pub use descriptor::{LargeDataDescriptor, TransferMetadata};
+pub use descriptor::LargeDataDescriptor;
+pub use metadata::TransferMetadata;
+pub use redundancy::RedundancyConfig;
 pub use error::{LargeDataError, LargeDataResult};
 pub use manager::{ChunkManager, ChunkManagerConfig};
 pub use network::{NetworkTransferCoordinator, NetworkPeerInfo, NetworkStats};

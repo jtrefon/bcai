@@ -33,6 +33,12 @@ impl AsRef<[u8]> for WireProtocol {
     }
 }
 
+impl AsRef<str> for WireProtocol {
+    fn as_ref(&self) -> &str {
+        "/bcai/wire/1.0.0"
+    }
+}
+
 impl request_response::Codec for WireCodec {
     type Protocol = WireProtocol;
     type Request = WireMessage;

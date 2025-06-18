@@ -23,7 +23,7 @@ impl Default for TransferPriority {
 }
 
 /// Statistics for a single data transfer operation.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransferStats {
     /// Total bytes transferred
     pub bytes_transferred: u64,

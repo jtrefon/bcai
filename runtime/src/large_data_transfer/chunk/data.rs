@@ -1,4 +1,4 @@
-//! Defines the `DataChunk` struct, the fundamental unit of data transfer.
+//! Defines the `DataChunk` type used during large data transfers.
 
 use super::{
     error::ChunkError,
@@ -9,19 +9,29 @@ use super::{
 use crate::large_data_transfer::{config::CompressionAlgorithm, error::LargeDataError, LargeDataResult};
 use serde::{Deserialize, Serialize};
 
-/// A data chunk, containing metadata and the actual data payload.
+/// A chunk of raw bytes identified by a unique `ChunkId`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataChunk {
-    /// Chunk metadata.
-    pub info: ChunkInfo,
-
-    /// Actual chunk data (may be compressed).
+    pub id: ChunkId,
     pub data: Vec<u8>,
 }
 
 impl DataChunk {
+    pub fn new(id: ChunkId, data: Vec<u8>) -> Self {
+        Self { id, data }
+    }
+
+    /// Returns the size of the chunk in bytes.
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     /// Create a new data chunk from a raw data slice.
-    pub fn new(
+    pub fn new_from_slice(
         data: Vec<u8>,
         index: u32,
         compression: CompressionAlgorithm,
@@ -59,23 +69,13 @@ impl DataChunk {
             index,
         };
 
-        Ok(Self { info, data: final_data })
-    }
-
-    /// Get the chunk's unique identifier.
-    pub fn id(&self) -> &ChunkId {
-        &self.info.id
-    }
-
-    /// Get the size of the data payload (which may be compressed).
-    pub fn size(&self) -> usize {
-        self.data.len()
+        Ok(Self { id, data: final_data })
     }
 
     /// Verify the integrity of the chunk by checking its hash and checksum.
     pub fn verify_integrity(&self) -> Result<(), ChunkError> {
         let expected_id = ChunkId::from_data(&self.data);
-        if expected_id != self.info.id {
+        if expected_id != self.id {
             return Err(ChunkError::IntegrityCheckFailed("Content hash mismatch".into()));
         }
 

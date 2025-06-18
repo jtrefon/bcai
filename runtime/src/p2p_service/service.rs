@@ -37,12 +37,6 @@ pub struct P2PService {
 }
 
 impl P2PService {
-    /// Create a new `P2PService` and its handle. The full implementation lives in
-    /// `service_init.rs` (extracted for readability).
-    pub async fn new(config: P2PConfig) -> Result<(Self, P2PHandle), P2PError> {
-        super::service_init::create_service(config).await
-    }
-
     /// The main event loop of the P2P service.
     pub async fn run(mut self) {
         loop {

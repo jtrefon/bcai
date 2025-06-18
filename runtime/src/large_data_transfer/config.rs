@@ -32,6 +32,12 @@ pub struct LargeDataConfig {
 
     /// Encryption configuration
     pub encryption_config: EncryptionConfig,
+
+    /// Interval for peer updates (e.g. refresh peer stats).
+    pub peer_update_interval: Duration,
+
+    /// Timeout after which a peer is considered stale and removed.
+    pub peer_timeout: Duration,
 }
 
 impl Default for LargeDataConfig {
@@ -46,6 +52,8 @@ impl Default for LargeDataConfig {
             cache_config: CacheConfig::default(),
             compression_config: CompressionConfig::default(),
             encryption_config: EncryptionConfig::default(),
+            peer_update_interval: Duration::from_secs(30),
+            peer_timeout: Duration::from_secs(300),
         }
     }
 }

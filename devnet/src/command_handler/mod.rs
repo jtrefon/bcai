@@ -246,4 +246,17 @@ impl CommandHandler {
         SecretKey::from_bytes(&key_bytes)
             .map_err(|e| format!("Failed to create secret key from bytes: {}", e).into())
     }
+}
+
+mod info;
+mod mine;
+mod tx;
+mod account;
+mod job;
+
+// Re-export CommandHandler
+pub use self::core::CommandHandler;
+
+mod core {
+    // original content will remain here temporarily
 } 
