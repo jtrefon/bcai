@@ -12,6 +12,9 @@ pub mod config;
 pub mod error;
 pub mod service;
 pub mod types;
+pub mod service_event;
+pub mod service_command;
+pub mod service_init;
 
 #[cfg(test)]
 mod tests;
