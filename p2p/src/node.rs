@@ -1,14 +1,15 @@
 use libp2p::{
-    core::{transport::MemoryTransport, upgrade},
-    identity, noise,
-    request_response::{Config as RequestResponseConfig, ProtocolSupport},
+    identity,
     swarm::{Swarm, SwarmEvent},
-    tcp, yamux, Multiaddr, PeerId, Transport,
+    Multiaddr, PeerId,
 };
-use rand::Rng;
-use std::time::Duration;
 
-use crate::{behaviour::{Behaviour, Capability, JobRequest, JobResponse, NodeEvent}, codec::JobCodec};
+use crate::{
+    behaviour::{Behaviour, Capability, NodeEvent},
+    transport::{create_memory_transport, create_tcp_transport, create_behaviour, create_swarm},
+    network::NetworkOperations,
+    training::MLTrainer,
+};
 
 pub struct Node {
     pub peer_id: PeerId,
@@ -26,19 +27,10 @@ impl Node {
         let id = identity::Keypair::generate_ed25519();
         let peer_id = PeerId::from(id.public());
 
-        let transport = MemoryTransport::default()
-            .upgrade(upgrade::Version::V1)
-            .authenticate(noise::Config::new(&id).expect("noise config"))
-            .multiplex(yamux::Config::default())
-            .timeout(Duration::from_secs(20))
-            .boxed();
-
-        let ping = libp2p::ping::Behaviour::default();
-        let cfg = RequestResponseConfig::default();
-        let protocols = std::iter::once(("/job/1.0.0".to_string(), ProtocolSupport::Full));
-        let req = libp2p::request_response::Behaviour::new(protocols, cfg);
-        let behaviour = Behaviour { ping, req };
-        let swarm = Swarm::new(transport, behaviour, peer_id, libp2p::swarm::Config::with_tokio_executor());
+        let transport = create_memory_transport(&id).expect("memory transport");
+        let behaviour = create_behaviour();
+        let swarm = create_swarm(transport, behaviour, peer_id);
+        
         Self { peer_id, swarm, capability: Capability { cpus, gpus } }
     }
 
@@ -47,19 +39,10 @@ impl Node {
         let id = identity::Keypair::generate_ed25519();
         let peer_id = PeerId::from(id.public());
 
-        let transport = tcp::tokio::Transport::new(tcp::Config::default())
-            .upgrade(upgrade::Version::V1)
-            .authenticate(noise::Config::new(&id).expect("noise config"))
-            .multiplex(yamux::Config::default())
-            .timeout(Duration::from_secs(20))
-            .boxed();
+        let transport = create_tcp_transport(&id).expect("tcp transport");
+        let behaviour = create_behaviour();
+        let swarm = create_swarm(transport, behaviour, peer_id);
 
-        let ping = libp2p::ping::Behaviour::default();
-        let cfg = RequestResponseConfig::default();
-        let protocols = std::iter::once(("/job/1.0.0".to_string(), ProtocolSupport::Full));
-        let req = libp2p::request_response::Behaviour::new(protocols, cfg);
-        let behaviour = Behaviour { ping, req };
-        let swarm = Swarm::new(transport, behaviour, peer_id, libp2p::swarm::Config::with_tokio_executor());
         Self { peer_id, swarm, capability: Capability { cpus, gpus } }
     }
 
@@ -68,15 +51,14 @@ impl Node {
     }
 
     pub fn listen(&mut self) -> Multiaddr {
-        let port: u64 = rand::thread_rng().gen_range(1..u64::MAX);
-        let addr: Multiaddr = format!("/memory/{port}").parse().expect("memory addr");
+        let addr = NetworkOperations::generate_memory_address();
         self.swarm.listen_on(addr.clone()).expect("listen_on");
         addr
     }
 
     /// Listen on a TCP port, returning the bound multiaddress.
     pub fn listen_tcp(&mut self, port: u16) -> Multiaddr {
-        let addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{port}").parse().expect("tcp addr");
+        let addr = NetworkOperations::generate_tcp_address(port);
         self.swarm.listen_on(addr.clone()).expect("listen_on");
         addr
     }
@@ -86,18 +68,17 @@ impl Node {
     }
 
     pub fn send_handshake(&mut self, peer: PeerId) {
-        let req = JobRequest::Handshake(self.capability.clone());
+        let req = NetworkOperations::create_handshake_request(self.capability.clone());
         self.swarm.behaviour_mut().req.send_request(&peer, req);
     }
 
     pub fn send_train(&mut self, peer: PeerId, data: Vec<u8>) {
-        let req = JobRequest::Train(data);
+        let req = NetworkOperations::create_train_request(data);
         self.swarm.behaviour_mut().req.send_request(&peer, req);
     }
 
-    fn train_lr(data: &[u8]) -> Vec<f32> {
-        // TODO: implement ML logic properly; using placeholder for now.
-        data.iter().map(|b| *b as f32).collect()
+    pub fn train_lr(&self, data: &[u8]) -> Vec<f32> {
+        MLTrainer::train_linear_regression(data)
     }
 
     pub async fn next_event(&mut self) -> NodeEvent {

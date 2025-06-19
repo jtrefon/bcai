@@ -1,4 +1,3 @@
-
 pub mod cli;
 pub mod command_handler;
 pub mod config;
@@ -8,3 +7,7 @@ pub mod init;
 pub mod job;
 pub mod ledger;
 pub mod persistence;
+pub mod commands;
+pub mod app;
+pub mod training;
+pub mod ops;

@@ -9,6 +9,8 @@ mod eviction;
 mod info;
 mod manager;
 mod stats;
+mod storage;
+mod retrieval;
 
 #[cfg(test)]
 mod tests;

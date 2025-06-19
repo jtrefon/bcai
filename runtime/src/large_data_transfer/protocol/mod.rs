@@ -6,6 +6,10 @@ pub mod message;
 pub mod session;
 pub mod stats;
 pub mod state;
+pub mod session_state;
+pub mod peer_management;
+pub mod chunk_tracking;
+pub mod progress_metrics;
 
 #[cfg(test)]
 mod tests;

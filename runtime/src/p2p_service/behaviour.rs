@@ -27,7 +27,7 @@ pub enum BCAIBehaviourEvent {
 #[behaviour(out_event = "BCAIBehaviourEvent")]
 pub struct BCAINetworkBehaviour {
     pub gossipsub: gossipsub::Behaviour,
-    pub kademlia: kad::Behaviour,
+    pub kademlia: kad::Behaviour<kad::store::MemoryStore>,
     pub request_response: request_response::Behaviour<WireCodec>,
 }
 

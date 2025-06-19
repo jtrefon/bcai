@@ -33,7 +33,6 @@ pub struct Solution {
     pub computation_time_ms: u64,
 }
 
-
 /// Configuration for PoUW security parameters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoUWConfig {
@@ -52,5 +51,31 @@ impl Default for PoUWConfig {
             time_window_secs: 3600,     // 1 hour
             min_computation_ms: 100,    // 100ms
         }
+    }
+}
+
+/// Simple type alias for backward compatibility.
+pub type PoUWSolution = Solution;
+
+impl PoUWTask {
+    /// Creates a new PoUWTask with random challenge and current timestamp.
+    pub fn new(model_id: String, dataset_id: String, epochs: u32) -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let mut challenge = [0u8; 32];
+        rng.fill(&mut challenge);
+        Self {
+            model_id,
+            dataset_id,
+            epochs,
+            timestamp: chrono::Utc::now().timestamp() as u64,
+            challenge,
+        }
+    }
+
+    /// Dummy verification that always returns true for now.
+    pub fn verify(&self, _solution: &PoUWSolution) -> bool {
+        // TODO: Implement real verification logic.
+        true
     }
 } 

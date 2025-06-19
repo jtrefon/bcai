@@ -11,7 +11,7 @@ use libp2p::{
     gossipsub, identity, kad,
     request_response::{self, ProtocolSupport},
     swarm::{Swarm, SwarmEvent},
-    Multiaddr, PeerId,
+    Multiaddr, PeerId, Transport,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

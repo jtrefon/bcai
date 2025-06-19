@@ -7,7 +7,7 @@ use super::{
 
 /// Extended implementation for `P2PService` that handles libp2p swarm events.
 impl P2PService {
-    pub(super) async fn handle_swarm_event(&mut self, event: SwarmEvent<BCAIBehaviourEvent, libp2p::swarm::THandlerErr<BCAINetworkBehaviour>>) {
+    pub(super) async fn handle_swarm_event(&mut self, event: SwarmEvent<BCAIBehaviourEvent>) {
         match event {
             SwarmEvent::Behaviour(BCAIBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: _,

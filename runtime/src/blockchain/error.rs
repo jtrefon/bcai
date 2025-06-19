@@ -10,4 +10,8 @@ pub enum BlockchainError {
     InvalidNonce { expected: u64, got: u64 },
     #[error("Insufficient funds for sender. Required: {required}, Available: {available}")]
     InsufficientFunds { required: u64, available: u64 },
+    #[error("Transaction validation failed: {0}")]
+    TransactionValidationError(String),
+    #[error("No blocks in chain")]
+    NoBlocksInChain,
 } 

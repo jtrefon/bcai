@@ -12,6 +12,10 @@ pub mod error;
 pub mod state;
 pub mod transaction;
 pub mod validation;
+pub mod chain_ext;
+pub mod genesis;
+pub mod block_processor;
+pub mod account_manager;
 
 // 2. Re-export the most important public types for easier access.
 pub use block::Block;

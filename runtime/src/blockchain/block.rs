@@ -47,7 +47,7 @@ impl Block {
     }
 
     /// Calculates the block's hash based on its contents.
-    fn calculate_hash(&self) -> String {
+    pub fn calculate_hash(&self) -> String {
         let mut hasher = Sha256::new();
         let tx_root = Transaction::merkle_root(&self.transactions);
         let contents = format!(
@@ -61,5 +61,10 @@ impl Block {
         );
         hasher.update(contents);
         hex::encode(hasher.finalize())
+    }
+
+    /// Convenience helper that delegates to `Transaction::merkle_root`.
+    pub fn calculate_merkle_root(transactions: &[Transaction]) -> String {
+        Transaction::merkle_root(transactions)
     }
 } 

@@ -30,7 +30,7 @@ pub struct P2PService {
     stats: P2PStats,
     start_time: Option<Instant>,
     config: P2PConfig,
-    request_map: HashMap<
+    pub(super) request_map: HashMap<
         request_response::RequestId,
         oneshot::Sender<Result<WireMessage, P2PError>>,
     >,

@@ -48,11 +48,12 @@ chrono = { workspace = true }
 async-trait = "0.1"
 rand = { workspace = true }
 
-# Temporarily disabled problematic binaries
-# [[bin]]
-# name = "bcai"
-# path = "bcai-cli.rs"
+# BCAI CLI binary
+[[bin]]
+name = "bcai-cli"
+path = "bcai-cli.rs"
 
+# Temporarily disabled problematic binaries
 # [[bin]]
 # name = "blockchain"
 # path = "runtime/src/bin/blockchain.rs"

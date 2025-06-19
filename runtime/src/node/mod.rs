@@ -11,6 +11,12 @@ pub mod node;
 pub mod stake_handler;
 pub mod types;
 
+// Job handling sub-modules
+pub mod job_posting;
+pub mod job_volunteering;
+pub mod job_completion;
+pub mod capability_validator;
+
 #[cfg(test)]
 mod tests;
 

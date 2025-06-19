@@ -15,7 +15,7 @@ pub enum WireMessage {
 
 /// The codec used for the request-response protocol.
 /// It uses JSON for serialization.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WireCodec;
 
 #[derive(Clone)]

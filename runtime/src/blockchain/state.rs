@@ -72,4 +72,7 @@ impl Default for State {
     fn default() -> Self {
         Self::new()
     }
-} 
+}
+
+/// Public alias exposed to other modules for convenience.
+pub type BlockchainState = State; 
