@@ -24,6 +24,10 @@ pub struct ChunkInfo {
 
     /// The sequence index of this chunk in the original data object.
     pub index: u32,
+
+    /// Node IDs that currently store a replica of this chunk (original holder + copies).
+    #[serde(default)]
+    pub replicas: Vec<String>,
 }
 
 impl ChunkInfo {

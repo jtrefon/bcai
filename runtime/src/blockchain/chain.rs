@@ -1,7 +1,6 @@
 use crate::blockchain::{
     block::Block,
     config::BlockchainConfig,
-    error::BlockchainError,
     state::BlockchainState,
     transaction::Transaction,
     validation,
@@ -12,6 +11,8 @@ use crate::blockchain::{
 use std::collections::HashMap;
 
 /// The main Blockchain struct, representing the distributed ledger.
+pub use crate::blockchain::error::BlockchainError;
+
 pub struct Blockchain {
     pub blocks: Vec<Block>,
     pub state: BlockchainState,

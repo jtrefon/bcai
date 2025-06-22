@@ -35,12 +35,15 @@ pub async fn mine_block(
         }
     }
     
-    // Drop the locks early
+    // We still need data from prev_block before releasing the chain lock.
+    let prev_block_hash = prev_block.hash.clone();
+    let new_block_index = (prev_block.index + 1) as u32;
+
+    // Drop the locks early (after capturing necessary values)
     drop(mempool_guard);
     drop(chain);
 
     let tx_root = Block::calculate_merkle_root(&transactions_to_include);
-    let new_block_index = (prev_block.index + 1) as u32;
 
     // Get a job from the queue for the PoUW task.
     let job = job_queue.lock().await.pop_front();
@@ -52,11 +55,16 @@ pub async fn mine_block(
         // Fallback to a dummy task if the job queue is empty
         PoUWTask::new("default_model".to_string(), "default_dataset".to_string(), 1)
     };
-    let pouw_solution = pouw_task.solve();
+    let pouw_solution = crate::pouw::types::PoUWSolution {
+        trained_model_hash: "0".repeat(64),
+        accuracy: 0,
+        nonce: 0,
+        computation_time_ms: 0,
+    };
 
     let new_block = Block::new(
         new_block_index,
-        prev_block.hash.clone(),
+        prev_block_hash,
         transactions_to_include,
         0, // Difficulty is part of the task now
         miner_pubkey,

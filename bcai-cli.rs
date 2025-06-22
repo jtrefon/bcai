@@ -22,6 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "monitor" => show_monitoring_system().await?,
         "network" => show_network_status().await?,
         "security" => show_security_status().await?,
+        "store" => handle_store(&args[2..]).await?,
+        "dfs" => handle_dfs(&args[2..]).await?,
         "test" => run_integration_tests().await?,
         _ => show_help(),
     }

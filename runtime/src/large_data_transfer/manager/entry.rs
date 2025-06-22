@@ -5,9 +5,9 @@ use std::time::Instant;
 
 /// An entry in the chunk cache, containing the chunk and its metadata.
 #[derive(Debug, Clone)]
-pub(super) struct ChunkEntry {
+pub(crate) struct ChunkEntry {
     /// The actual data chunk.
-    pub(super) chunk: DataChunk,
+    pub(crate) chunk: DataChunk,
     /// The last time this chunk was accessed, for LRU eviction.
     pub(super) last_accessed: Instant,
     /// How many times the chunk has been accessed.

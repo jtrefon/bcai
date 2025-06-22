@@ -35,13 +35,9 @@ pub fn verify(
 
 /// Checks if a hash meets the given difficulty target.
 /// A lower difficulty value means a more difficult target.
-fn meets_difficulty(hash: &[u8; 32], difficulty: u32) -> bool {
-    let mut difficulty_bytes = [0u8; 4];
-    difficulty_bytes.copy_from_slice(&difficulty.to_be_bytes());
-    
-    // The hash must be less than or equal to the difficulty target.
-    // We only need to check the most significant bytes for this comparison.
-    &hash[..4] <= &difficulty_bytes
+pub fn meets_difficulty(hash: &[u8; 32], difficulty: u32) -> bool {
+    let hash_prefix = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
+    hash_prefix <= difficulty
 }
 
 /// Validates that the task's timestamp is within the acceptable window.
@@ -68,7 +64,7 @@ fn validate_computation_time(computation_time_ms: u64, config: &PoUWConfig) -> b
 
 /// Creates a cryptographic commitment to the task's parameters for integrity.
 /// This ensures a solution is tied to a specific, unmodified task.
-fn create_task_commitment(task: &PoUWTask) -> [u8; 32] {
+pub fn create_task_commitment(task: &PoUWTask) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(task.model_id.as_bytes());
     hasher.update(task.dataset_id.as_bytes());

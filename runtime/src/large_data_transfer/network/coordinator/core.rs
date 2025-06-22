@@ -1,5 +1,5 @@
 use crate::large_data_transfer::{manager::ChunkManager, protocol::ProtocolHandler, LargeDataConfig};
-use super::super::{models::{BandwidthTracker, NetworkPeerInfo, NetworkTransferMessage}, stats::NetworkStats};
+use crate::large_data_transfer::network::models::{BandwidthTracker, NetworkPeerInfo, NetworkTransferMessage};
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};

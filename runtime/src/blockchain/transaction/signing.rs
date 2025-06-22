@@ -11,7 +11,7 @@ impl Transaction {
         fee: u64,
         nonce: u64,
     ) -> Self {
-        let signer_pk = from_secret_key.public_key();
+        let signer_pk = from_secret_key.to_public();
         let mut tx = Transaction {
             from: hex::encode(signer_pk.to_bytes()),
             to: hex::encode(to_public_key.to_bytes()),
@@ -22,7 +22,7 @@ impl Transaction {
         };
         // Sign hash bytes.
         let msg = tx.to_hash_bytes();
-        let sig = from_secret_key.sign(signing_context(SIGNING_CONTEXT).bytes(&msg));
+        let sig = from_secret_key.sign(signing_context(SIGNING_CONTEXT).bytes(&msg), &signer_pk);
         tx.signature = Some(hex::encode(sig.to_bytes()));
         tx
     }

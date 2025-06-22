@@ -28,7 +28,7 @@ impl NetworkTransferCoordinator {
                 .active_transfers
                 .iter()
                 .filter(|entry| entry.value().peers.contains_key(peer_id))
-                .map(|entry| entry.key().clone())
+                .map(|entry| entry.key().to_string())
                 .collect();
 
             for transfer_id in transfers_to_cancel {
@@ -53,7 +53,7 @@ impl NetworkTransferCoordinator {
                 .iter()
                 .filter_map(|entry| {
                     if now.duration_since(entry.value().last_seen) > stale_timeout {
-                        Some(entry.key().clone())
+                        Some(entry.key().to_string())
                     } else {
                         None
                     }

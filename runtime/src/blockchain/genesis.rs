@@ -1,9 +1,9 @@
 use crate::blockchain::{
     block::Block,
-    constants::DEV_GENESIS_PUBKEY,
+    constants::DEV_PUBLIC_KEY,
     state::BlockchainState,
 };
-use crate::pouw::{PoUWTask, PoUWSolution};
+use crate::pouw::{PoUWTask}; use crate::pouw::types::PoUWSolution;
 use std::collections::HashMap;
 
 pub struct GenesisCreator;
@@ -15,11 +15,14 @@ impl GenesisCreator {
             model_id: "genesis_model".to_string(),
             dataset_id: "genesis_data".to_string(),
             epochs: 0,
+            timestamp: 0,
+            challenge: [0u8; 32],
         };
         let genesis_solution = PoUWSolution {
             trained_model_hash: "0".repeat(64),
             accuracy: 10000,
             nonce: 0,
+            computation_time_ms: 0,
         };
         
         Block::new(
@@ -40,8 +43,8 @@ impl GenesisCreator {
     ) {
         state
             .balances
-            .insert(DEV_GENESIS_PUBKEY.to_string(), 1_000_000_000);
+            .insert(DEV_PUBLIC_KEY.to_string(), 1_000_000_000);
         account_nonces
-            .insert(DEV_GENESIS_PUBKEY.to_string(), 0);
+            .insert(DEV_PUBLIC_KEY.to_string(), 0);
     }
 } 

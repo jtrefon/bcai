@@ -13,4 +13,17 @@ impl Default for RedundancyConfig {
     fn default() -> Self {
         Self { replica_count: 1, erasure_coding: false, min_nodes: 1 }
     }
+}
+
+/// Lightweight policy type used in pricing and CLI.
+#[derive(Debug, Clone, Copy)]
+pub struct RedundancyPolicy {
+    pub copies: u8,
+    pub geo_spread: bool,
+}
+
+impl From<RedundancyConfig> for RedundancyPolicy {
+    fn from(cfg: RedundancyConfig) -> Self {
+        RedundancyPolicy { copies: cfg.replica_count as u8, geo_spread: false }
+    }
 } 

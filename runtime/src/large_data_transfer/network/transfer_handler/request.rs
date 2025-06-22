@@ -20,7 +20,7 @@ impl NetworkTransferCoordinator {
             // Wait for response with timeout.
             tokio::time::timeout(self.config.chunk_timeout, self.wait_for_chunk_response(chunk_id))
                 .await
-                .map_err(|_| NetworkError::TransferTimeout.into())?
+                .map_err(|_| crate::large_data_transfer::LargeDataError::from(NetworkError::TransferTimeout))?
         } else {
             println!("❌ No peer found with requested chunk");
             Ok(None)

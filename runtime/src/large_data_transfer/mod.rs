@@ -23,6 +23,7 @@ pub mod protocol;
 pub mod types;
 pub mod metadata;
 pub mod redundancy;
+pub mod pricing;
 
 // Re-export core types
 pub use chunk::{ChunkId, ChunkInfo, DataChunk};
@@ -31,9 +32,10 @@ pub use config::{
 };
 pub use descriptor::LargeDataDescriptor;
 pub use metadata::TransferMetadata;
-pub use redundancy::RedundancyConfig;
+pub use redundancy::{RedundancyConfig, RedundancyPolicy};
+    pub use pricing::{PriceQuote, quote as quote_price};
 pub use error::{LargeDataError, LargeDataResult};
 pub use manager::{ChunkManager, ChunkManagerConfig};
-pub use network::{NetworkTransferCoordinator, NetworkPeerInfo, NetworkStats};
-pub use protocol::{TransferError, TransferMessage, TransferState};
+
+
 pub use types::{TransferPriority, TransferStats}; 

@@ -13,7 +13,7 @@ impl ProtocolHandler {
             .get_mut(&content_hash)
             .ok_or_else(|| TransferError::TransferNotFound(content_hash.clone()))?;
 
-        println!("Received chunk {} for {}", chunk.chunk_id.to_string(), session.content_hash);
+        println!("Received chunk {} for {}", chunk.id.to_string(), session.content_hash);
         // TODO: store chunk, update session state, maybe send ACK.
         Ok(vec![])
     }

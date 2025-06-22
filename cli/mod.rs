@@ -5,6 +5,8 @@ pub mod monitoring;
 pub mod network;
 pub mod security;
 pub mod testing;
+pub mod storage;
+pub mod dfs;
 
 pub use dashboard::show_production_dashboard;
 pub use deployment::handle_deployment;
@@ -13,6 +15,8 @@ pub use monitoring::show_monitoring_system;
 pub use network::show_network_status;
 pub use security::show_security_status;
 pub use testing::run_integration_tests;
+pub use storage::handle_store;
+pub use dfs::handle_dfs;
 
 pub fn show_help() {
     println!("🔧 BCAI CLI Commands:");
@@ -23,4 +27,6 @@ pub fn show_help() {
     println!("   network    - Network management");
     println!("   security   - Security operations");
     println!("   test       - Run integration tests");
+    println!("   store      - Upload file to network");
+    println!("   dfs        - Distributed File-system commands");
 } 

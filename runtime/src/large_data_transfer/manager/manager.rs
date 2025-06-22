@@ -14,7 +14,7 @@ use std::time::Instant;
 #[derive(Debug)]
 pub struct ChunkManager {
     pub(super) config: ChunkManagerConfig,
-    pub(super) chunks: Arc<Mutex<HashMap<ChunkId, ChunkEntry>>>,
+    pub(crate) chunks: Arc<Mutex<HashMap<ChunkId, ChunkEntry>>>,
     pub(super) memory_usage: Arc<Mutex<u64>>,
     pub(super) last_cleanup: Arc<Mutex<Instant>>,
 }

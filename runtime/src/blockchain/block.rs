@@ -1,5 +1,5 @@
 use crate::blockchain::transaction::Transaction;
-use crate::pouw::{PoUWTask, PoUWSolution};
+use crate::pouw::{PoUWTask}; use crate::pouw::types::PoUWSolution;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

@@ -16,7 +16,7 @@ impl DataChunk {
             CompressionAlgorithm::Lz4 => {
                 let compressed = lz4_flex::compress_prepend_size(&data);
                 if compressed.len() < data.len() {
-                    (compressed, compressed.len() as u32, CompressionAlgorithm::Lz4)
+                    (compressed.clone(), compressed.len() as u32, CompressionAlgorithm::Lz4)
                 } else {
                     (data, 0, CompressionAlgorithm::None)
                 }
@@ -33,7 +33,7 @@ impl DataChunk {
             compressed_size,
             compression: actual_compression,
             checksum,
-            index,
+            index, replicas: vec![],
         };
 
         Ok(DataChunk { id, data: final_data, info })
