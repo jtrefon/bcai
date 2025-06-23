@@ -133,6 +133,8 @@ libp2p = { version = "0.53.2", features = [
     "mdns"
 ] }
 
+bincode = "1.3"
+
 [dev-dependencies]
 criterion = "0.5"
 

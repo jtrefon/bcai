@@ -9,3 +9,6 @@ pub const DEV_FUNDING: u64 = 1_000_000_000;
 
 /// The context for signing transactions to prevent replay attacks on other systems.
 pub const SIGNING_CONTEXT: &[u8] = b"bcai-transaction";
+
+/// Public key authorised to submit UpdateMetrics admin transactions.
+pub const METRICS_ORACLE_PUB: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";

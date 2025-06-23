@@ -1,6 +1,10 @@
 use runtime::large_data_transfer::{pricing, redundancy::RedundancyPolicy};
 use runtime::distributed_storage::{run_auto_heal, ReplicationManager, StorageNode};
 use std::sync::Arc;
+use runtime::large_data_transfer::descriptor::LargeDataDescriptor;
+use std::path::PathBuf;
+use std::io::{BufWriter, Write, Read};
+use std::fs::{File, create_dir_all};
 
 const PRICE_PER_GIB_BCAI: u128 = 10;
 
@@ -11,6 +15,7 @@ pub async fn handle_dfs(args: &[String]) -> Result<(), Box<dyn std::error::Error
     }
     match args[0].as_str() {
         "quote" => quote_price(&args[1..])?,
+        "get" => get_file(&args[1..])?,
         "rebalance" => {
             println!("🔄 Triggering network rebalance (auto-heal)…");
             // Stub – create empty managers for now
@@ -52,6 +57,46 @@ fn parse_copies(args: &[String]) -> Option<u8> {
 fn print_help() {
     println!("DFS subcommands:");
     println!("  dfs quote <FILE> [--copies N]   – price estimation");
+    println!("  dfs get <DESCRIPTOR_HASH> <OUT_FILE> – retrieve file");
     println!("  dfs rebalance                   – trigger auto-heal");
     println!("  dfs stats                       – show storage stats");
+}
+
+fn get_file(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    if args.len() < 2 {
+        eprintln!("Usage: dfs get <DESCRIPTOR_HASH> <OUT_FILE>");
+        return Ok(());
+    }
+
+    let descriptor_hash = &args[0];
+    let out_path = PathBuf::from(&args[1]);
+
+    let base_dir = std::env::var("HOME")?
+        + "/.bcai/dfs";
+    let desc_path = PathBuf::from(&base_dir).join("descriptors").join(format!("{}.json", descriptor_hash));
+    if !desc_path.exists() {
+        eprintln!("Descriptor not found: {}", desc_path.display());
+        return Ok(());
+    }
+
+    let descriptor: LargeDataDescriptor = serde_json::from_reader(File::open(&desc_path)?)?;
+
+    let chunk_dir = PathBuf::from(&base_dir).join("chunks");
+    let mut out_file = BufWriter::new(File::create(&out_path)?);
+
+    for chunk_hash in descriptor.chunk_hashes.iter() {
+        let chunk_path = chunk_dir.join(format!("{}.bin", chunk_hash));
+        if !chunk_path.exists() {
+            eprintln!("Missing chunk {} ({}). Aborting.", chunk_hash, chunk_path.display());
+            return Ok(());
+        }
+        let mut f = File::open(&chunk_path)?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+        out_file.write_all(&buf)?;
+    }
+
+    out_file.flush()?;
+    println!("✅ File reconstructed to {} ({} bytes)", out_path.display(), descriptor.size_bytes);
+    Ok(())
 } 

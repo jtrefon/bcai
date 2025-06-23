@@ -1,13 +1,18 @@
-use crate::blockchain::{transaction::Transaction, chain::BlockchainError, state::State};
+use crate::blockchain::{transaction::{Transaction, StorageTx}, chain::BlockchainError, state::State};
 use std::collections::HashMap;
 
 /// Stateless checks such as signature validity.
 pub fn validate_transaction_stateless(tx: &Transaction) -> Result<(), BlockchainError> {
-    if tx.verify_signature() {
-        Ok(())
-    } else {
-        Err(BlockchainError::TransactionValidationError("Invalid signature".into()))
+    if !tx.verify_signature() {
+        return Err(BlockchainError::TransactionValidationError("Invalid signature".into()));
     }
+    // Additional rule for UpdateMetrics – must come from oracle pub key.
+    if let Some(StorageTx::UpdateMetrics { .. }) = &tx.storage {
+        if tx.from != crate::blockchain::constants::METRICS_ORACLE_PUB {
+            return Err(BlockchainError::TransactionValidationError("Unauthorised metrics submitter".into()));
+        }
+    }
+    Ok(())
 }
 
 /// Validate nonce & balance against the current state.
@@ -21,14 +26,21 @@ pub fn validate_transaction_stateful(tx: &Transaction, state: &State) -> Result<
     }
 
     let balance = state.get_balance(&tx.from);
-    let total_cost = tx.amount.checked_add(tx.fee).ok_or_else(|| {
-        BlockchainError::TransactionValidationError("Balance overflow".into())
-    })?;
 
-    if balance < total_cost {
+    // Determine cost depending on storage payload presence
+    let total_cost: u128 = match &tx.storage {
+        Some(StorageTx::StoreFile { price, .. }) => (*price as u128) + tx.fee as u128,
+        Some(StorageTx::RewardHolding { .. }) => tx.fee as u128, // node only pays fee
+        Some(StorageTx::UpdateMetrics { .. }) => 0u128, // admin tx no cost
+        None => (tx.amount as u128) + tx.fee as u128,
+    };
+
+    let total_cost_u64 = total_cost as u64;
+
+    if balance < total_cost_u64 {
         return Err(BlockchainError::TransactionValidationError(format!(
             "Insufficient funds for {}. Have {}, need {}",
-            tx.from, balance, total_cost
+            tx.from, balance, total_cost_u64
         )));
     }
     Ok(())
