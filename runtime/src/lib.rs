@@ -15,6 +15,13 @@ pub mod pouw;
 pub mod p2p_service;
 pub mod wire;
 pub mod job;
+pub mod evaluator;
+pub mod trainer;
+pub mod job_manager;
+pub mod token;
+pub mod tensor_ops;
+pub mod vm;
+pub use vm::{Instruction, Vm, VmConfig};
 
 // --- Data Model & Placeholder Modules ---
 pub mod consensus_engine;
@@ -26,19 +33,33 @@ pub mod large_data_transfer;
 pub mod performance_optimizer;
 pub mod security_layer;
 
-// Note: The `token` module has been removed as its functionality is
-// now part of the `blockchain::state` module.
+// Temporary token module until full ledger is integrated into
+// `blockchain::state`.
 
 #[cfg(not(feature = "node"))]
 pub mod node {
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-    pub enum NodeCapability {
-        Cpu,
-        Gpu,
-        Tpu,
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub enum CapabilityType {
+        BasicCompute,
+        GpuAccelerated,
+        HighMemory,
+        Storage,
+        Network,
+        Training,
+        Inference,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct NodeCapability {
+        pub cpus: u32,
+        pub gpus: u32,
+        pub gpu_memory_gb: u32,
+        pub available_stake: u64,
+        pub reputation: i32,
+        pub capability_types: Vec<CapabilityType>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -19,6 +19,8 @@ pub struct Blockchain {
     /// Mapping from public key (hex string) to the next valid nonce.
     pub account_nonces: HashMap<String, u64>,
     pub config: BlockchainConfig,
+    /// Pending transactions awaiting inclusion in a block.
+    pub pending_transactions: Vec<Transaction>,
 }
 
 impl Blockchain {
@@ -29,6 +31,7 @@ impl Blockchain {
             state: BlockchainState::new(),
             account_nonces: HashMap::new(),
             config,
+            pending_transactions: Vec::new(),
         };
         blockchain.create_genesis_block();
         blockchain
@@ -62,4 +65,46 @@ impl Blockchain {
     pub fn get_balance(&self, pubkey_hex: &str) -> u64 {
         AccountManager::get_balance(&self.state, pubkey_hex)
     }
-} 
+
+    /// Returns the latest block (the chain tip).
+    pub fn get_tip(&self) -> &Block {
+        self.blocks.last().expect("chain must have genesis block")
+    }
+
+    /// Current block height.
+    pub fn height(&self) -> u64 {
+        self.blocks.len() as u64
+    }
+
+    /// Adds a transaction to the pending list after validation.
+    pub fn add_transaction(&mut self, tx: Transaction) -> Result<(), BlockchainError> {
+        self.validate_transaction(&tx)?;
+        self.pending_transactions.push(tx);
+        Ok(())
+    }
+
+    /// Returns up to `limit` pending transactions.
+    pub fn get_pending_transactions(&self, limit: usize) -> Vec<Transaction> {
+        self.pending_transactions.iter().take(limit).cloned().collect()
+    }
+
+    /// Placeholder difficulty adjustment using constant base difficulty.
+    pub fn calculate_next_difficulty(&self) -> u32 {
+        self.config.max_transactions_per_block as u32
+    }
+
+    /// Simple blockchain statistics.
+    pub fn get_stats(&self) -> BlockchainStats {
+        BlockchainStats {
+            height: self.height(),
+            pending_txs: self.pending_transactions.len(),
+        }
+    }
+}
+
+/// Lightweight chain metrics.
+#[derive(Debug, Clone)]
+pub struct BlockchainStats {
+    pub height: u64,
+    pub pending_txs: usize,
+}

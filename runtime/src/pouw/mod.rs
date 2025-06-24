@@ -15,6 +15,7 @@ mod tests;
 
 pub use difficulty::calculate_adaptive_difficulty;
 pub use solver::solve;
-pub use task::generate_task;
+pub use task::{generate_task, generate_task_with_timestamp};
 pub use types::{PoUWConfig, Solution, PoUWTask};
-pub use verifier::verify; 
+pub use types::PoUWTask as Task;
+pub use verifier::verify;
