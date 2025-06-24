@@ -23,4 +23,12 @@ pub fn generate_task(difficulty: u32, seed: u64) -> PoUWTask {
         timestamp,
         challenge,
     }
-} 
+}
+
+/// Generates a PoUW task using the given timestamp for determinism.
+/// This is a convenience wrapper used by node modules.
+pub fn generate_task_with_timestamp(difficulty: u32, timestamp: u64) -> PoUWTask {
+    let mut task = generate_task(difficulty, timestamp);
+    task.timestamp = timestamp;
+    task
+}

@@ -20,6 +20,7 @@ pub mod account_manager;
 // 2. Re-export the most important public types for easier access.
 pub use block::Block;
 pub use chain::Blockchain;
+pub use chain::BlockchainStats;
 pub use config::BlockchainConfig;
 pub use error::BlockchainError;
 pub use transaction::Transaction; 

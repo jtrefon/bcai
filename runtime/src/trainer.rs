@@ -10,8 +10,8 @@ impl Trainer {
 
     /// Executes useful work and returns dummy metrics & solution for now.
     pub fn execute(&self, task: &PoUWTask) -> TrainingOutput {
-        // For compilation we just call solver with low difficulty.
-        let solution = task.solve();
+        // For compilation we just call solver with a very low difficulty.
+        let solution = crate::pouw::solve(task, 1);
         TrainingOutput {
             metrics: std::collections::HashMap::new(),
             solution,
