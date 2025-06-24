@@ -19,6 +19,9 @@ pub mod evaluator;
 pub mod trainer;
 pub mod job_manager;
 pub mod token;
+pub mod tensor_ops;
+pub mod vm;
+pub use vm::{Instruction, Vm, VmConfig};
 
 // --- Data Model & Placeholder Modules ---
 pub mod consensus_engine;
