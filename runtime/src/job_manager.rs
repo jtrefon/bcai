@@ -3,8 +3,10 @@ use thiserror::Error;
 /// Placeholder error for job manager ops.
 #[derive(Debug, Error)]
 pub enum JobManagerError {
-    #[error("Stub job manager error: {0}")]
+    #[error("operation failed: {0}")]
     Stub(String),
+    #[error("insufficient balance for job action")]
+    InsufficientBalance,
 }
 
 /// Minimal stub for job manager, tracks jobs by id.

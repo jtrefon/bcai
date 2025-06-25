@@ -10,6 +10,12 @@ pub struct State {
     pub nonces: HashMap<String, u64>,
     /// Latest metrics for known storage nodes.
     pub node_metrics: HashMap<String, crate::distributed_storage::allocation::NodeMetrics>,
+    /// Stored hashes of PoUW evaluation submissions keyed by task id.
+    pub pouw_evaluations: HashMap<String, String>,
+    /// Staked token balances for validator selection and slashing.
+    pub stakes: HashMap<String, u64>,
+    /// Recent PoUW metrics (accuracy, computation time in ms) for difficulty adjustment.
+    pub pouw_metrics: Vec<(u32, u64)>,
 }
 
 impl State {
@@ -19,6 +25,9 @@ impl State {
             balances: HashMap::new(),
             nonces: HashMap::new(),
             node_metrics: HashMap::new(),
+            pouw_evaluations: HashMap::new(),
+            stakes: HashMap::new(),
+            pouw_metrics: Vec::new(),
         }
     }
 
@@ -40,6 +49,11 @@ impl State {
                     for m in metrics {
                         self.node_metrics.insert(m.node_id.clone(), m.clone());
                     }
+                    0u128
+                }
+                crate::blockchain::transaction::StorageTx::PoUWEvaluationHash { task_id, evaluation_hash } => {
+                    // Record the evaluation hash for later verification.
+                    self.pouw_evaluations.insert(task_id.clone(), evaluation_hash.clone());
                     0u128
                 }
             }
@@ -90,6 +104,46 @@ impl State {
     /// A special function to directly set a balance, used for genesis block creation.
     pub fn set_balance(&mut self, pubkey: &str, amount: u64) {
         self.balances.insert(pubkey.to_string(), amount);
+    }
+
+    /// Moves tokens from the balance map into the staking ledger.
+    pub fn stake_tokens(&mut self, pubkey: &str, amount: u64) -> Result<(), BlockchainError> {
+        let balance = self.balances.entry(pubkey.to_string()).or_insert(0);
+        if *balance < amount {
+            return Err(BlockchainError::TransactionValidationError("insufficient balance to stake".into()));
+        }
+        *balance -= amount;
+        *self.stakes.entry(pubkey.to_string()).or_default() += amount;
+        Ok(())
+    }
+
+    /// Moves tokens from the staking ledger back to spendable balance.
+    pub fn unstake_tokens(&mut self, pubkey: &str, amount: u64) -> Result<(), BlockchainError> {
+        let staked = self.stakes.entry(pubkey.to_string()).or_insert(0);
+        if *staked < amount {
+            return Err(BlockchainError::TransactionValidationError("insufficient staked amount".into()));
+        }
+        *staked -= amount;
+        *self.balances.entry(pubkey.to_string()).or_default() += amount;
+        Ok(())
+    }
+
+    /// Burns staked tokens as a penalty.
+    pub fn slash_stake(&mut self, pubkey: &str, amount: u64) {
+        let staked = self.stakes.entry(pubkey.to_string()).or_insert(0);
+        if *staked < amount {
+            *staked = 0;
+        } else {
+            *staked -= amount;
+        }
+    }
+
+    /// Records PoUW metrics for future difficulty adjustments.
+    pub fn record_pouw_metrics(&mut self, accuracy: u32, computation_ms: u64) {
+        self.pouw_metrics.push((accuracy, computation_ms));
+        if self.pouw_metrics.len() > 100 {
+            self.pouw_metrics.remove(0);
+        }
     }
 }
 

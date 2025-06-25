@@ -28,6 +28,12 @@ impl BlockProcessor {
         // Reward the miner
         Self::reward_miner(block, total_fees, state)?;
 
+        // Record PoUW metrics for difficulty adjustment
+        state.record_pouw_metrics(
+            block.solution.accuracy,
+            block.solution.computation_time_ms,
+        );
+
         Ok(())
     }
 
@@ -37,7 +43,9 @@ impl BlockProcessor {
         total_fees: u64,
         state: &mut BlockchainState,
     ) -> Result<(), BlockchainError> {
-        let miner_reward = BLOCK_REWARD
+        let accuracy_factor = block.solution.accuracy as f64 / 10000.0;
+        let base_reward = ((BLOCK_REWARD as f64) * accuracy_factor).round() as u64;
+        let miner_reward = base_reward
             .checked_add(total_fees)
             .ok_or(BlockchainError::TransactionValidationError(
                 "Miner reward overflow".to_string(),

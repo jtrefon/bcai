@@ -32,6 +32,7 @@ pub fn validate_transaction_stateful(tx: &Transaction, state: &State) -> Result<
         Some(StorageTx::StoreFile { price, .. }) => (*price as u128) + tx.fee as u128,
         Some(StorageTx::RewardHolding { .. }) => tx.fee as u128, // node only pays fee
         Some(StorageTx::UpdateMetrics { .. }) => 0u128, // admin tx no cost
+        Some(StorageTx::PoUWEvaluationHash { .. }) => 0u128,
         None => (tx.amount as u128) + tx.fee as u128,
     };
 

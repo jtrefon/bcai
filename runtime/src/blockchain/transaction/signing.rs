@@ -86,4 +86,28 @@ impl Transaction {
         tx.signature = Some(hex::encode(sig.to_bytes()));
         tx
     }
-} 
+
+    /// Create and sign a PoUWEvaluationHash storage transaction.
+    pub fn new_pouw_evaluation_signed(
+        from_secret_key: &SecretKey,
+        task_id: String,
+        evaluation_hash: String,
+        nonce: u64,
+    ) -> Self {
+        let signer_pk = from_secret_key.to_public();
+        let mut tx = Transaction {
+            from: hex::encode(signer_pk.to_bytes()),
+            to: String::new(),
+            amount: 0,
+            fee: 0,
+            nonce,
+            storage: Some(super::core::StorageTx::PoUWEvaluationHash { task_id, evaluation_hash }),
+            signature: None,
+        };
+
+        let msg = tx.to_hash_bytes();
+        let sig = from_secret_key.sign(signing_context(SIGNING_CONTEXT).bytes(&msg), &signer_pk);
+        tx.signature = Some(hex::encode(sig.to_bytes()));
+        tx
+    }
+}

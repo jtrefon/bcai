@@ -88,9 +88,25 @@ impl Blockchain {
         self.pending_transactions.iter().take(limit).cloned().collect()
     }
 
-    /// Placeholder difficulty adjustment using constant base difficulty.
+    /// Adaptive difficulty based on recent PoUW metrics.
     pub fn calculate_next_difficulty(&self) -> u32 {
-        self.config.max_transactions_per_block as u32
+        let prev_difficulty = self.get_tip().difficulty;
+        let target_time = 60; // target solve time in seconds
+        let avg_time_ms = if self.state.pouw_metrics.is_empty() {
+            target_time * 1000
+        } else {
+            self.state
+                .pouw_metrics
+                .iter()
+                .map(|m| m.1)
+                .sum::<u64>()
+                / self.state.pouw_metrics.len() as u64
+        };
+        crate::pouw::calculate_adaptive_difficulty(
+            prev_difficulty,
+            target_time,
+            avg_time_ms / 1000,
+        )
     }
 
     /// Simple blockchain statistics.
