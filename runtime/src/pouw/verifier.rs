@@ -68,6 +68,12 @@ pub fn create_task_commitment(task: &PoUWTask) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(task.model_id.as_bytes());
     hasher.update(task.dataset_id.as_bytes());
+    if let Some(ref h) = task.model_hash {
+        hasher.update(h.as_bytes());
+    }
+    if let Some(ref h) = task.dataset_hash {
+        hasher.update(h.as_bytes());
+    }
     hasher.update(task.epochs.to_le_bytes());
     hasher.update(task.timestamp.to_le_bytes());
     hasher.update(task.challenge);

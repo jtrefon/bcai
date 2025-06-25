@@ -10,6 +10,12 @@ pub struct PoUWTask {
     pub model_id: String,
     /// An identifier for the dataset to be used for training.
     pub dataset_id: String,
+    /// Optional SHA-256 hash of the ONNX model stored off-chain.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_hash: Option<String>,
+    /// Optional SHA-256 hash of the validation dataset stored on DFS.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dataset_hash: Option<String>,
     /// The number of training epochs required.
     pub epochs: u32,
     /// The timestamp when the task was created, to prevent pre-computation.
@@ -31,6 +37,36 @@ pub struct Solution {
     pub nonce: u64,
     /// The time it took to compute the solution in milliseconds.
     pub computation_time_ms: u64,
+}
+
+/// A signed evaluation result from a validator.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SignedEvaluation {
+    /// ID of the evaluated task.
+    pub task_id: String,
+    /// Accuracy reported by the validator.
+    pub accuracy: u32,
+    /// Validator ID and signature over (task_id, accuracy).
+    pub validator: String,
+    pub signature: Vec<u8>,
+}
+
+/// Configuration for selecting validators for evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ValidatorSelectionConfig {
+    /// Minimum stake required to be eligible as a validator.
+    pub min_stake: u64,
+    /// Number of validators to select for each task.
+    pub subset_size: usize,
+}
+
+impl Default for ValidatorSelectionConfig {
+    fn default() -> Self {
+        Self {
+            min_stake: 1,
+            subset_size: 3,
+        }
+    }
 }
 
 /// Configuration for PoUW security parameters.
@@ -67,15 +103,16 @@ impl PoUWTask {
         Self {
             model_id,
             dataset_id,
+            model_hash: None,
+            dataset_hash: None,
             epochs,
             timestamp: chrono::Utc::now().timestamp() as u64,
             challenge,
         }
     }
 
-    /// Dummy verification that always returns true for now.
-    pub fn verify(&self, _solution: &PoUWSolution) -> bool {
-        // TODO: Implement real verification logic.
-        true
+    /// Verifies a solution using the PoUW verifier with default configuration.
+    pub fn verify(&self, solution: &PoUWSolution, difficulty: u32) -> bool {
+        crate::pouw::verifier::verify(self, solution, difficulty, &PoUWConfig::default())
     }
-} 
+}

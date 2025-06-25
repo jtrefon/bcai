@@ -14,6 +14,8 @@ impl GenesisCreator {
         let genesis_task = PoUWTask {
             model_id: "genesis_model".to_string(),
             dataset_id: "genesis_data".to_string(),
+            model_hash: None,
+            dataset_hash: None,
             epochs: 0,
             timestamp: 0,
             challenge: [0u8; 32],

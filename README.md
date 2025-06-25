@@ -6,6 +6,7 @@ Our mission is to deliver the fastest and most secure decentralized platform for
 - [HONEST_GAP_ANALYSIS.md](HONEST_GAP_ANALYSIS.md) (governance gap analysis)
 - [HONEST_GAP_ANALYSIS_AI.md](HONEST_GAP_ANALYSIS_AI.md) (AI training & data transfer gap analysis)
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (realistic plan & phase gaps)
+- [POUW_IMPLEMENTATION_PLAN.md](POUW_IMPLEMENTATION_PLAN.md) (steps to implement PoUW)
 for the current status.
 
 

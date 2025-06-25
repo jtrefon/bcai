@@ -4594,6 +4594,7 @@ dependencies = [
  "crc32fast",
  "criterion",
  "dashmap",
+ "ed25519-dalek",
  "flate2",
  "futures",
  "hex",

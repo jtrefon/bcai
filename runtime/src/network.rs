@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 use crate::blockchain::{BlockchainError, Transaction, Block};
+use crate::pouw::types::SignedEvaluation;
 
 /// Network message types for distributed coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +23,8 @@ pub enum NetworkMessage {
     JobVolunteer { job_id: u64, node_id: String, capability: NodeCapability },
     TrainingResultSubmission { result: TrainingResult, submitter_id: String },
     TrainingEvaluation { job_id: u64, result_hash: String, is_valid: bool, evaluator_id: String },
+    /// Gossip message carrying a signed PoUW evaluation.
+    PoUWEvaluation { evaluation: SignedEvaluation },
     JobCompleted { job_id: u64, final_model_hash: String },
     StateSync { requesting_node: String, last_known_block: u64 },
     StateSyncResponse { jobs: Vec<DistributedJob>, current_block: u64 },

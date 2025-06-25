@@ -25,7 +25,7 @@ pub fn validate_block(block: &Block, prev_block: &Block, state: &State) -> Resul
     }
 
     // PoUW verification
-    if !block.task.verify(&block.solution) {
+    if !block.task.verify(&block.solution, block.difficulty) {
         return Err(BlockchainError::InvalidBlock("Invalid PoUW solution".into()));
     }
 

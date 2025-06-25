@@ -20,6 +20,11 @@ pub enum StorageTx {
     UpdateMetrics {
         metrics: Vec<crate::distributed_storage::allocation::NodeMetrics>,
     },
+    /// Commit the hash of a PoUW evaluation on-chain for integrity.
+    PoUWEvaluationHash {
+        task_id: String,
+        evaluation_hash: String,
+    },
 }
 
 /// A signed value-transfer transaction on the chain.

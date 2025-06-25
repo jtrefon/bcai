@@ -19,6 +19,8 @@ pub fn generate_task(difficulty: u32, seed: u64) -> PoUWTask {
     PoUWTask {
         model_id: format!("model_{}", difficulty),
         dataset_id: format!("dataset_{}", difficulty),
+        model_hash: None,
+        dataset_hash: None,
         epochs: difficulty, // Using difficulty as a proxy for epochs
         timestamp,
         challenge,
