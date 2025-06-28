@@ -106,14 +106,21 @@ EOF
         # Create data directory
         mkdir -p "$node_dir/data"
         
-        # Generate mock keys (in real implementation, use keygen binary)
-        cat > "$node_dir/keys.json" << EOF
+        # Generate keys using the keygen binary when available. This gives the
+        # integration test more realistic inputs. If the binary hasn't been
+        # built yet, fall back to simple mock keys so the tests remain runnable
+        # in lightweight environments.
+        if [ -x ./target/release/keygen ]; then
+            ./target/release/keygen generate --private-key "$node_dir/keys.json" --name "node$i" >/dev/null
+        else
+            cat > "$node_dir/keys.json" << EOF
 {
     "private_key": "mock_private_key_$i",
     "public_key": "mock_public_key_$i",
     "node_id": "node$i"
 }
 EOF
+        fi
     done
     
     log_success "Generated configurations for $NODE_COUNT nodes"

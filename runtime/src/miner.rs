@@ -38,6 +38,7 @@ pub async fn mine_block(
     // We still need data from prev_block before releasing the chain lock.
     let prev_block_hash = prev_block.hash.clone();
     let new_block_index = (prev_block.index + 1) as u32;
+    let difficulty = chain.calculate_next_difficulty();
 
     // Drop the locks early (after capturing necessary values)
     drop(mempool_guard);
@@ -48,25 +49,20 @@ pub async fn mine_block(
     // Get a job from the queue for the PoUW task.
     let job = job_queue.lock().await.pop_front();
 
-    // TODO: The PoUW task should come from a job queue.
     let pouw_task = if let Some(job) = job {
         PoUWTask::new(job.model_id, job.dataset_id, job.iterations)
     } else {
-        // Fallback to a dummy task if the job queue is empty
         PoUWTask::new("default_model".to_string(), "default_dataset".to_string(), 1)
     };
-    let pouw_solution = crate::pouw::types::PoUWSolution {
-        trained_model_hash: "0".repeat(64),
-        accuracy: 0,
-        nonce: 0,
-        computation_time_ms: 0,
-    };
+
+    // Solve the task to produce a real PoUW solution instead of a placeholder.
+    let pouw_solution = crate::pouw::solve(&pouw_task, difficulty);
 
     let new_block = Block::new(
         new_block_index,
         prev_block_hash,
         transactions_to_include,
-        0, // Difficulty is part of the task now
+        difficulty,
         miner_pubkey,
         pouw_task,
         pouw_solution,

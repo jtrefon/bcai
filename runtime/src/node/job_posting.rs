@@ -20,13 +20,11 @@ impl UnifiedNode {
             return Err(NodeError::JobManager(JobManagerError::InsufficientBalance));
         }
 
-        // In a real system, this would be a transaction sent to the blockchain
-        // to be processed by the consensus mechanism.
-        self.job_manager
-            .ledger_mut()
-            .transfer(&self.node_id, "escrow", reward)?;
-
+        // Use the job manager to escrow the reward and record the submission.
         let job_id = self.distributed_jobs.len() as u64 + 1;
+        self.job_manager
+            .submit_job(&self.node_id, job_id, reward)?;
+
         let job = DistributedJob {
             id: job_id,
             description,

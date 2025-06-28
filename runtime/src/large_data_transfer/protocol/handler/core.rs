@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
-use crate::large_data_transfer::{descriptor::LargeDataDescriptor, LargeDataResult};
+use crate::large_data_transfer::{descriptor::LargeDataDescriptor, LargeDataResult, manager::ChunkManager};
 use super::super::{message::TransferMessage, session::TransferSession, state::TransferState};
 use super::super::error::TransferError;
 
@@ -12,12 +13,18 @@ pub struct ProtocolHandler {
     pub(super) sessions: HashMap<String, TransferSession>,
     pub node_id: String,
     default_timeout: Duration,
+    pub(super) chunk_manager: Arc<ChunkManager>,
 }
 
 impl ProtocolHandler {
     /// Create a new handler for the local node.
-    pub fn new(node_id: String) -> Self {
-        Self { sessions: HashMap::new(), node_id, default_timeout: Duration::from_secs(60) }
+    pub fn new(node_id: String, chunk_manager: Arc<ChunkManager>) -> Self {
+        Self {
+            sessions: HashMap::new(),
+            node_id,
+            default_timeout: Duration::from_secs(60),
+            chunk_manager,
+        }
     }
 
     /// Begin downloading a large data object by descriptor.

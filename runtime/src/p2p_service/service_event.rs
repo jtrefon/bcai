@@ -1,4 +1,4 @@
-use libp2p::{gossipsub, request_response, swarm::SwarmEvent};
+use libp2p::{gossipsub, kad, request_response, swarm::SwarmEvent, PeerId};
 use super::{
     behaviour::{BCAIBehaviourEvent, BCAINetworkBehaviour},
     error::P2PError,
@@ -20,14 +20,47 @@ impl P2PService {
                 );
             }
             SwarmEvent::Behaviour(BCAIBehaviourEvent::Kademlia(event)) => {
-                // TODO: Handle Kademlia events (peer discovery, etc.)
-                tracing::debug!(?event, "Kademlia event");
+                if let kad::Event::OutboundQueryCompleted { result, .. } = event {
+                    if let kad::QueryResult::GetClosestPeers(Ok(res)) = result {
+                        for peer in res.peers {
+                            let id = peer.to_string();
+                            self.peers
+                                .entry(id.clone())
+                                .or_insert(super::types::PeerInfo {
+                                    peer_id: id.clone(),
+                                    capabilities: None,
+                                    last_seen: std::time::Instant::now(),
+                                    reputation: 0,
+                                    connection_count: 1,
+                                });
+                        }
+                        self.stats.peer_count = self.peers.len();
+                    }
+                } else {
+                    tracing::debug!(?event, "Kademlia event");
+                }
             }
             SwarmEvent::Behaviour(BCAIBehaviourEvent::RequestResponse(
                 request_response::Event::Message { peer, message },
             )) => {
-                tracing::debug!(?peer, ?message, "RequestResponse message");
-                // TODO: process incoming request-response messages
+                match message {
+                    request_response::Message::Request { request, channel, .. } => {
+                        let response = match request {
+                            super::codec::WireMessage::Ping => super::codec::WireMessage::Pong,
+                            _ => super::codec::WireMessage::Pong,
+                        };
+                        let _ = self
+                            .swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_response(channel, response);
+                    }
+                    request_response::Message::Response { request_id, response } => {
+                        if let Some(tx) = self.request_map.remove(&request_id) {
+                            let _ = tx.send(Ok(response));
+                        }
+                    }
+                }
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 println!("Listening on {}", address);

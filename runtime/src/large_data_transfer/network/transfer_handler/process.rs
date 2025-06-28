@@ -1,5 +1,9 @@
 use super::super::{models::NetworkTransferMessage, error::NetworkError, coordinator::NetworkTransferCoordinator};
-use crate::large_data_transfer::{LargeDataResult, chunk::{ChunkId, DataChunk}};
+use crate::large_data_transfer::{
+    chunk::{ChunkId, DataChunk},
+    config::CompressionAlgorithm,
+    LargeDataResult,
+};
 use std::time::Instant;
 
 impl NetworkTransferCoordinator {
@@ -45,8 +49,22 @@ impl NetworkTransferCoordinator {
                 };
                 self.send_to_peer(&requester_id, response).await?;
             }
+            NetworkTransferMessage::ChunkResponse { chunk_id, data, error } => {
+                if let Some(sender) = self.pending_responses.remove(&chunk_id) {
+                    let payload = match (data, error) {
+                        (Some(bytes), None) => {
+                            match DataChunk::new_from_slice(bytes, 0, CompressionAlgorithm::None) {
+                                Ok(chunk) => Some(chunk),
+                                Err(_) => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    let _ = sender.1.send(payload);
+                }
+            }
             _ => {}
         }
         Ok(())
     }
-} 
+}
