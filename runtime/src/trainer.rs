@@ -8,14 +8,21 @@ pub struct Trainer {
 impl Trainer {
     pub fn new(node_id: &str) -> Self { Self { node_id: node_id.to_string() } }
 
-    /// Executes useful work and returns dummy metrics & solution for now.
+    /// Executes useful work and returns metrics & solution.
+    ///
+    /// This now records the time spent solving the PoUW task and exposes it in
+    /// the returned metrics map so callers can track actual training duration.
     pub fn execute(&self, task: &PoUWTask) -> TrainingOutput {
-        // For compilation we just call solver with a very low difficulty.
+        let start = std::time::Instant::now();
+
+        // Perform the PoUW solving with a low difficulty for now.
         let solution = crate::pouw::solve(task, 1);
-        TrainingOutput {
-            metrics: std::collections::HashMap::new(),
-            solution,
-        }
+
+        let duration_ms = start.elapsed().as_millis() as f64;
+        let mut metrics = std::collections::HashMap::new();
+        metrics.insert("duration_ms".to_string(), duration_ms);
+
+        TrainingOutput { metrics, solution }
     }
 }
 

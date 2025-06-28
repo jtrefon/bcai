@@ -1,5 +1,7 @@
 use super::*;
 use crate::large_data_transfer::descriptor::LargeDataDescriptor;
+use crate::large_data_transfer::manager::ChunkManager;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[test]
@@ -40,7 +42,8 @@ fn test_session_progress_calculation() {
 
 #[test]
 fn test_protocol_handler() {
-    let mut handler = ProtocolHandler::new("node1".to_string());
+    let manager = ChunkManager::default();
+    let mut handler = ProtocolHandler::new("node1".to_string(), Arc::new(manager));
     let descriptor = LargeDataDescriptor {
         id: "test_hash".to_string(),
         ..Default::default()

@@ -14,10 +14,7 @@ impl UnifiedNode {
         job_id: u64,
         difficulty: u32,
     ) -> Result<TrainingResult, NodeError> {
-        let job = self
-            .distributed_jobs
-            .get_mut(&job_id)
-            .ok_or(NodeError::JobNotFound(job_id))?;
+        let job = self.distributed_jobs.get_mut(&job_id).ok_or(NodeError::JobNotFound(job_id))?;
 
         if job.status != JobStatus::WorkersAssigned {
             return Err(NodeError::InvalidStateTransition);
@@ -28,8 +25,9 @@ impl UnifiedNode {
         let task = generate_task_with_timestamp(difficulty, job.id);
         let result = self.trainer.execute(&task)?;
 
-        // In a real system, the model hash would be the hash of the trained model file.
-        let model_hash = "mock_model_hash".to_string();
+        // Use the trained model hash from the PoUW solution instead of a
+        // placeholder value.
+        let model_hash = result.solution.trained_model_hash.clone();
 
         let training_result = TrainingResult {
             job_id,
@@ -39,8 +37,7 @@ impl UnifiedNode {
             worker_signatures: vec![self.node_id.clone()], // Simplified
         };
 
-        self.pending_results
-            .insert(job_id, training_result.clone());
+        self.pending_results.insert(job_id, training_result.clone());
         job.status = JobStatus::EvaluationPending;
 
         Ok(training_result)
@@ -52,10 +49,7 @@ impl UnifiedNode {
         job_id: u64,
         result: &TrainingResult,
     ) -> Result<bool, NodeError> {
-        let job = self
-            .distributed_jobs
-            .get(&job_id)
-            .ok_or(NodeError::JobNotFound(job_id))?;
+        let job = self.distributed_jobs.get(&job_id).ok_or(NodeError::JobNotFound(job_id))?;
 
         let is_valid = self.evaluator.evaluate(result)?;
 
@@ -70,4 +64,4 @@ impl UnifiedNode {
 
         Ok(true)
     }
-} 
+}

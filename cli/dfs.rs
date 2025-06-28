@@ -1,5 +1,6 @@
 use runtime::large_data_transfer::{pricing, redundancy::RedundancyPolicy};
 use runtime::distributed_storage::{run_auto_heal, ReplicationManager, StorageNode};
+use runtime::large_data_transfer::network::coordinator::NetworkTransferCoordinator;
 use std::sync::Arc;
 use runtime::large_data_transfer::descriptor::LargeDataDescriptor;
 use std::path::PathBuf;
@@ -21,7 +22,12 @@ pub async fn handle_dfs(args: &[String]) -> Result<(), Box<dyn std::error::Error
             // Stub – create empty managers for now
             let cm = Arc::new(runtime::large_data_transfer::manager::ChunkManager::default());
             let repl = ReplicationManager { nodes: Vec::new() };
-            tokio::spawn(run_auto_heal(cm, repl, 3));
+            let coord = NetworkTransferCoordinator::new(
+                "local".into(),
+                runtime::large_data_transfer::config::LargeDataConfig::default(),
+                cm.clone(),
+            );
+            tokio::spawn(run_auto_heal(cm, repl, coord, 3));
         },
         "stats" => {
             println!("📊 DFS Stats: (placeholder – real metrics TBD)");
