@@ -24,8 +24,27 @@ pub fn verify(
     
     // 3. Re-create the hash and check if it meets the difficulty target.
     let task_commitment = create_task_commitment(task);
+
+    // Decode the hex-encoded trained_model_hash from the solution
+    let trained_model_hash_bytes = match hex::decode(&solution.trained_model_hash) {
+        Ok(bytes) => {
+            if bytes.len() == 32 {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                arr
+            } else {
+                // Invalid hash length
+                return false;
+            }
+        }
+        Err(_) => {
+            // Invalid hex string
+            return false;
+        }
+    };
+
     let mut hasher = Sha256::new();
-    hasher.update(solution.trained_model_hash.as_bytes()); // Assuming this is the core output
+    hasher.update(&trained_model_hash_bytes); // Use the decoded bytes
     hasher.update(&task_commitment);
     hasher.update(&solution.nonce.to_le_bytes());
     let hash: [u8; 32] = hasher.finalize().into();

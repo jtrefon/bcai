@@ -3,7 +3,7 @@
 use serde::{Serialize, Deserialize};
 
 /// Lightweight metadata describing a large data object being transferred.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LargeDataDescriptor {
     /// Unique identifier for the overall content – usually a root Merkle hash.
     pub id: String,

@@ -9,6 +9,8 @@ pub struct P2PConfig {
     pub listen_port: u16,
     /// Optional external address to advertise.
     pub external_address: Option<String>,
+    /// List of bootstrap node multiaddresses.
+    pub bootstrap_nodes: Vec<String>,
 }
 
 impl Default for P2PConfig {
@@ -16,6 +18,7 @@ impl Default for P2PConfig {
         Self {
             listen_port: 0, // Let the OS pick a free port.
             external_address: None,
+            bootstrap_nodes: Vec::new(), // Default to no bootstrap nodes
         }
     }
 } 

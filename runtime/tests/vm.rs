@@ -1,4 +1,4 @@
-use runtime::{Instruction, Vm, VmError};
+use runtime::{Instruction, Vm, vm::VmError}; // Corrected import path
 
 #[test]
 fn addition_works() -> Result<(), VmError> {
