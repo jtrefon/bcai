@@ -34,4 +34,29 @@ impl ChunkManager {
     pub fn default() -> Self {
         Self::new(ChunkManagerConfig::default())
     }
+
+    /// Returns the number of chunks currently stored.
+    pub fn chunk_count(&self) -> usize {
+        match self.chunks.lock() {
+            Ok(guard) => guard.len(),
+            Err(_) => 0, // Or handle poison error more gracefully
+        }
+    }
+
+    /// Returns the total memory usage in bytes of all stored chunks.
+    pub fn current_memory_usage(&self) -> u64 {
+        match self.memory_usage.lock() {
+            Ok(guard) => *guard,
+            Err(_) => 0, // Or handle poison error
+        }
+    }
+
+    /// Returns statistics about the chunk manager.
+    pub fn stats(&self) -> super::stats::ChunkManagerStats {
+        super::stats::ChunkManagerStats {
+            chunks_in_cache: self.chunk_count(),
+            bytes_in_cache: self.current_memory_usage(),
+            evictions: 0, // Placeholder, eviction count not tracked here yet
+        }
+    }
 } 

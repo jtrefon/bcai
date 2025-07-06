@@ -2,16 +2,33 @@ use super::*;
 use crate::large_data_transfer::chunk::{ChunkId, DataChunk};
 use std::time::Duration;
 
-fn create_test_chunk(id: u8, size: usize) -> DataChunk {
-    let data = vec![id; size];
-    DataChunk::new(data, 0, crate::large_data_transfer::config::CompressionAlgorithm::None).unwrap()
+use crate::large_data_transfer::chunk::info::ChunkInfo; // Added
+use crate::large_data_transfer::config::CompressionAlgorithm; // Added
+use crc32fast::Hasher; // Added
+
+fn create_test_chunk(id_byte: u8, size: usize) -> DataChunk {
+    let data = vec![id_byte; size];
+    let chunk_id = ChunkId::from_data(&data);
+    let mut hasher = Hasher::new();
+    hasher.update(&data);
+    let checksum = hasher.finalize();
+    let chunk_info = ChunkInfo {
+        id: chunk_id.clone(),
+        original_size: data.len() as u32,
+        compressed_size: data.len() as u32, // Assuming no compression
+        compression: CompressionAlgorithm::None,
+        checksum,
+        index: 0, // Example index, might need to be unique if tests store multiple chunks with same data
+        replicas: Vec::new(),
+    };
+    DataChunk::new(chunk_id, data, chunk_info)
 }
 
 #[test]
 fn test_chunk_manager_creation() {
     let manager = ChunkManager::default();
     assert_eq!(manager.chunk_count(), 0);
-    assert_eq!(manager.memory_usage(), 0);
+    assert_eq!(manager.current_memory_usage(), 0);
 }
 
 #[test]
@@ -22,7 +39,7 @@ fn test_store_and_retrieve_chunk() {
 
     manager.store_chunk(chunk.clone()).unwrap();
     assert_eq!(manager.chunk_count(), 1);
-    assert_eq!(manager.memory_usage(), 1024);
+    assert_eq!(manager.current_memory_usage(), 1024);
     assert!(manager.has_chunk(&chunk_id));
 
     let retrieved_chunk = manager.get_chunk(&chunk_id).unwrap();
@@ -40,7 +57,7 @@ fn test_chunk_removal() {
 
     assert!(manager.remove_chunk(&chunk_id));
     assert_eq!(manager.chunk_count(), 0);
-    assert_eq!(manager.memory_usage(), 0);
+    assert_eq!(manager.current_memory_usage(), 0);
     assert!(!manager.has_chunk(&chunk_id));
 }
 
@@ -72,8 +89,8 @@ fn test_stats() {
     manager.store_chunk(create_test_chunk(2, 2048)).unwrap();
 
     let stats = manager.stats();
-    assert_eq!(stats.chunk_count, 2);
-    assert_eq!(stats.memory_usage, 3072);
+    assert_eq!(stats.chunks_in_cache, 2);
+    assert_eq!(stats.bytes_in_cache, 3072);
 }
 
 #[test]
@@ -86,7 +103,7 @@ fn test_clear() {
     let cleared_count = manager.clear();
     assert_eq!(cleared_count, 2);
     assert_eq!(manager.chunk_count(), 0);
-    assert_eq!(manager.memory_usage(), 0);
+    assert_eq!(manager.current_memory_usage(), 0);
 }
 
 #[test]

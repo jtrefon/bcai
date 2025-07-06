@@ -2,7 +2,7 @@ use clap::{Arg, Command};
 use runtime::{
     blockchain::{Blockchain, BlockchainConfig, Block},
     token::TokenLedger,
-    pouw::{generate_task, solve_enhanced, verify_enhanced, Task, Solution},
+    pouw::{task as pouw_task, solve, verify, types::{PoUWTask, Solution as PoUWSolution, PoUWConfig}},
 };
 use serde_json;
 use std::fs;
@@ -92,38 +92,35 @@ async fn run_comprehensive_checklist(network: &str) -> Result<(), Box<dyn std::e
     // Test blockchain
     println!("  🔗 Testing blockchain core...");
     let blockchain_config = BlockchainConfig {
-        target_block_time: 12,
-        difficulty_adjustment_window: 10,
+        // target_block_time: 12, // Field does not exist
+        // difficulty_adjustment_window: 10, // Field does not exist
         max_transactions_per_block: 1000,
-        max_block_size: 1024 * 1024, // 1MB
+        // max_block_size: 1024 * 1024, // Field does not exist
     };
-    let mut blockchain = Blockchain::new(blockchain_config);
+    let mut blockchain = Blockchain::new(blockchain_config); // Assuming new takes BlockchainConfig
+    let pouw_config = PoUWConfig::default();
+    const TEST_DIFFICULTY: u32 = 0x0FFFFFFF;
     
     // Create genesis block with proper structure
-    let genesis_task = Task {
-        difficulty: 1,
-        data: vec![0; 4],
-        target: "genesis".to_string(),
-        a: vec![],
-        b: vec![],
-        timestamp: 0,
-        challenge: vec![0; 4],
-    };
+    let genesis_task_complexity = 1;
+    let genesis_seed = 0; // Fixed seed for genesis
+    let genesis_pouw_task = pouw_task::generate_task(genesis_task_complexity, genesis_seed); // Rely on inference
     
-    let genesis_solution = Solution {
+    let genesis_pouw_solution = PoUWSolution {
+        trained_model_hash: hex::encode([0u8; 32]),
+        accuracy: 0,
         nonce: 0,
-        result: vec![],
-        computation_time: 0,
+        computation_time_ms: 0,
     };
     
-    let genesis_block = Block::new(
+    let genesis_block = Block::new( // Assuming Block::new takes PoUWTask and PoUWSolution
         0,
         "00000000".to_string(),
         vec![],
-        0x0000ffff,
+        0x0000ffff, // This is likely the PoW difficulty target for the block itself
         "genesis".to_string(),
-        genesis_task,
-        genesis_solution,
+        genesis_pouw_task, // Use the correctly typed PoUWTask
+        genesis_pouw_solution, // Use the correctly typed PoUWSolution
     );
     
     match blockchain.add_block(genesis_block) {
@@ -151,9 +148,11 @@ async fn run_comprehensive_checklist(network: &str) -> Result<(), Box<dyn std::e
     // Test PoUW system
     println!("  ⚡ Testing PoUW system...");
     let pouw_start = Instant::now();
-    let task = generate_task(3); // Small task for deployment test
-    let solution = solve_enhanced(&task, 0x0000ffff);
-    let is_valid = verify_enhanced(&task, &solution, 0x0000ffff);
+    let task_complexity_check = 3;
+    let seed_check = 1;
+    let task = pouw_task::generate_task(task_complexity_check, seed_check);
+    let solution = solve(&task, TEST_DIFFICULTY);
+    let is_valid = verify(&task, &solution, TEST_DIFFICULTY, &pouw_config);
     let pouw_duration = pouw_start.elapsed();
     
     if is_valid {
@@ -220,9 +219,11 @@ async fn run_comprehensive_checklist(network: &str) -> Result<(), Box<dyn std::e
     
     for i in 1..=10 {
         let task_start = Instant::now();
-        let test_task = generate_task(2); // Smaller tasks for speed
-        let test_solution = solve_enhanced(&test_task, 0x0000ffff);
-        let test_valid = verify_enhanced(&test_task, &test_solution, 0x0000ffff);
+        let task_complexity_perf = 2;
+        let seed_perf = 100 + i as u64;
+        let test_task = pouw_task::generate_task(task_complexity_perf, seed_perf);
+        let test_solution = solve(&test_task, TEST_DIFFICULTY);
+        let test_valid = verify(&test_task, &test_solution, TEST_DIFFICULTY, &pouw_config);
         let task_duration = task_start.elapsed();
         
         total_solve_time += task_duration;
@@ -292,9 +293,11 @@ async fn run_comprehensive_checklist(network: &str) -> Result<(), Box<dyn std::e
     }
     
     // PoUW validation for job
-    let job_task = generate_task(3);
-    let job_solution = solve_enhanced(&job_task, 0x0000ffff);
-    let job_valid = verify_enhanced(&job_task, &job_solution, 0x0000ffff);
+    let task_complexity_job = 3;
+    let seed_job = 200;
+    let job_task = pouw_task::generate_task(task_complexity_job, seed_job);
+    let job_solution = solve(&job_task, TEST_DIFFICULTY);
+    let job_valid = verify(&job_task, &job_solution, TEST_DIFFICULTY, &pouw_config);
     
     if job_valid {
         println!("    ✅ Job PoUW validation: SUCCESS");
@@ -359,6 +362,8 @@ async fn run_stress_test(duration: u64) -> Result<(), Box<dyn std::error::Error>
     println!("🔥 Starting stress operations...");
     
     // Initialize systems
+    let pouw_config = PoUWConfig::default(); // Added
+    const TEST_DIFFICULTY: u32 = 0x0FFFFFFF; // Added, easy for testing
     let mut ledger = TokenLedger::new();
     ledger.mint("stress_test_node", 1_000_000);
     
@@ -367,9 +372,11 @@ async fn run_stress_test(duration: u64) -> Result<(), Box<dyn std::error::Error>
         match operations % 4 {
             0 => {
                 // PoUW operation
-                let task = generate_task(2);
-                let solution = solve_enhanced(&task, 0x0000ffff);
-                if verify_enhanced(&task, &solution, 0x0000ffff) {
+                let task_complexity_stress = 2;
+                let seed_stress = start.elapsed().as_nanos() as u64; // Vary seed
+                let task = pouw_task::generate_task(task_complexity_stress, seed_stress);
+                let solution = solve(&task, TEST_DIFFICULTY); // TEST_DIFFICULTY is now in scope
+                if verify(&task, &solution, TEST_DIFFICULTY, &pouw_config) { // pouw_config is now in scope
                     successful_operations += 1;
                 }
             }

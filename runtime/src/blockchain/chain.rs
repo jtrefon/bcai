@@ -8,11 +8,13 @@ use crate::blockchain::{
     block_processor::BlockProcessor,
     account_manager::AccountManager,
 };
+use serde::{Deserialize, Serialize}; // Added for derive
 use std::collections::HashMap;
 
 /// The main Blockchain struct, representing the distributed ledger.
 pub use crate::blockchain::error::BlockchainError;
 
+#[derive(Serialize, Deserialize)] // Added
 pub struct Blockchain {
     pub blocks: Vec<Block>,
     pub state: BlockchainState,

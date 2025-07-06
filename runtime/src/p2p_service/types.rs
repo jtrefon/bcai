@@ -25,4 +25,19 @@ pub struct P2PStats {
     pub bytes_received: u64,
     pub uptime: Duration,
     pub network_stats: NetworkStats,
-} 
+}
+
+impl Default for P2PStats {
+    fn default() -> Self {
+        Self {
+            peer_count: 0,
+            connected_peers: 0,
+            messages_sent: 0,
+            messages_received: 0,
+            bytes_sent: 0,
+            bytes_received: 0,
+            uptime: Duration::from_secs(0),
+            network_stats: Default::default(),
+        }
+    }
+}

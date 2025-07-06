@@ -1,5 +1,5 @@
 use clap::{Arg, Command};
-use runtime::{Blockchain, Vm};
+use runtime::{blockchain::Blockchain, Vm}; // Corrected import path
 use serde_json;
 use std::fs;
 use std::path::Path;

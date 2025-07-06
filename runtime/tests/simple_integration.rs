@@ -3,9 +3,14 @@
 
 use runtime::{
     token::{TokenLedger, LedgerError},
-    pouw::{Task, solve, verify},
-    TensorId, VmConfig, DataType, Blockchain, Transaction,
+    pouw::{task::generate_task, solve, verify, types::{PoUWConfig, PoUWTask, Solution as PoUWSolution}},
+    tensor_ops::{TensorId, DataType}, // Corrected path
+    vm::VmConfig, // Corrected path, assuming VmConfig is in vm
+    blockchain::Blockchain, // Corrected path
+    blockchain::Transaction, // Corrected path
 };
+
+const TEST_POW_DIFFICULTY_SIMPLE: u32 = 0x0FFFFFFF; // Easy for testing
 
 #[test]
 fn test_token_ledger_operations() -> Result<(), LedgerError> {
@@ -40,36 +45,20 @@ fn test_pouw_operations() {
     println!("🧪 Testing PoUW operations");
     
     // Use very simple tasks for CI (no matrix multiplication)
-    let task = Task {
-        difficulty: 10, // Low difficulty
-        data: vec![1, 2, 3, 4],
-        target: "test".to_string(),
-        a: vec![], // Empty for fast testing
-        b: vec![],
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-        challenge: vec![1, 2, 3, 4],
-    };
-    let solution = solve(&task).expect("Failed to solve task");
-    assert!(verify(&task, solution));
+    let pouw_config = PoUWConfig::default();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let task = generate_task(10, timestamp); // Use generate_task, 10 as complexity proxy
+    let solution = solve(&task, TEST_POW_DIFFICULTY_SIMPLE);
+    assert!(verify(&task, &solution, TEST_POW_DIFFICULTY_SIMPLE, &pouw_config));
     
     // Test with different task
-    let small_task = Task {
-        difficulty: 5, // Even lower difficulty
-        data: vec![5, 6, 7, 8],
-        target: "small_test".to_string(),
-        a: vec![], // Empty for fast testing
-        b: vec![],
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-        challenge: vec![5, 6, 7, 8],
-    };
-    let small_solution = solve(&small_task).expect("Failed to solve small task");
-    assert!(verify(&small_task, small_solution));
+    let small_task = generate_task(5, timestamp + 1); // 5 as complexity proxy
+    let small_solution = solve(&small_task, TEST_POW_DIFFICULTY_SIMPLE);
+    assert!(verify(&small_task, &small_solution, TEST_POW_DIFFICULTY_SIMPLE, &pouw_config));
     
     println!("✅ PoUW operations test passed");
 }
@@ -140,12 +129,13 @@ fn test_blockchain_operations() {
 fn test_transaction_serialization() {
     println!("🧪 Testing transaction serialization");
     
-    let transaction = Transaction {
-        from: "alice".to_string(),
-        to: "bob".to_string(),
-        amount: 100,
-        timestamp: 1234567890,
-    };
+    let transaction = Transaction::new(
+        "alice".to_string(),
+        "bob".to_string(),
+        100,
+        0, // Placeholder fee
+        0, // Placeholder nonce
+    );
     
     // Test JSON serialization
     let json = serde_json::to_string(&transaction).expect("Failed to serialize transaction");
@@ -197,35 +187,19 @@ fn test_comprehensive_integration() {
     ledger.transfer("system", "charlie", 1000).expect("Transfer failed");
     
     // 3. Generate PoUW tasks and solutions (simple for CI)
-    let task1 = Task {
-        difficulty: 10,
-        data: vec![1, 2, 3, 4],
-        target: "alice_task".to_string(),
-        a: vec![], // Empty for fast testing
-        b: vec![],
-        timestamp: std::time::SystemTime::now()
+    let pouw_config_integ = PoUWConfig::default();
+    let timestamp_integ = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-        challenge: vec![1, 2, 3, 4],
-    };
-    let solution1 = solve(&task1).expect("Failed to solve task1");
-    assert!(verify(&task1, solution1));
-    
-    let task2 = Task {
-        difficulty: 15,
-        data: vec![5, 6, 7, 8],
-        target: "bob_task".to_string(),
-        a: vec![], // Empty for fast testing
-        b: vec![],
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs(),
-        challenge: vec![5, 6, 7, 8],
-    };
-    let solution2 = solve(&task2).expect("Failed to solve task2");
-    assert!(verify(&task2, solution2));
+            .unwrap_or_default()
+            .as_secs();
+
+    let task1 = generate_task(10, timestamp_integ);
+    let solution1 = solve(&task1, TEST_POW_DIFFICULTY_SIMPLE);
+    assert!(verify(&task1, &solution1, TEST_POW_DIFFICULTY_SIMPLE, &pouw_config_integ));
+
+    let task2 = generate_task(15, timestamp_integ + 1);
+    let solution2 = solve(&task2, TEST_POW_DIFFICULTY_SIMPLE);
+    assert!(verify(&task2, &solution2, TEST_POW_DIFFICULTY_SIMPLE, &pouw_config_integ));
     
     // 4. Record transactions on blockchain
     blockchain.add_block(format!("PoUW task completed by alice: {:?}", task1));

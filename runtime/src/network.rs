@@ -84,3 +84,16 @@ pub struct NetworkStats {
     pub pending_transactions: usize,
     pub local_node_stats: crate::node::NodeStats,
 }
+
+impl Default for NetworkStats {
+    fn default() -> Self {
+        Self {
+            connected_peers: 0,
+            active_jobs: 0,
+            completed_jobs: 0,
+            network_block_height: 0,
+            pending_transactions: 0,
+            local_node_stats: Default::default(),
+        }
+    }
+}
